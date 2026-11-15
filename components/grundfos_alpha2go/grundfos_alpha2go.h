@@ -55,8 +55,8 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
  public:
   // EXPERIMENTELL (Branch feature/write-access): Schreibtests, nur auf ausdruecklichen Aufruf (z. B. Template-Button).
   // Anfrage und Antwort werden roh auf WARN geloggt, danach werden Betriebsstatus und 90/8 sofort zurueckgelesen.
-  void test_command(uint8_t cmd);                               // Class 3; nur 5 STOP, 6 START/AUTO, 7 REMOTE, 8 LOCAL, 66/67 Nachtabsenkung ein/aus
-  void test_set_night_setback(bool enabled, bool with_header);  // Class-10-SET auf 90/8, Variante A/B
+  void test_command(uint8_t cmd);                               // Class 3; nur 5 STOP, 6 START/AUTO, 7 REMOTE, 8 LOCAL
+  void test_set_night_setback(bool enabled);                    // Class-10-SET auf 90/8
   void test_raw_class10(const std::vector<uint8_t> &apdu);     // beliebige Class-10-APDU (Kopfbyte + Daten)
   void setup() override;
   void loop() override;

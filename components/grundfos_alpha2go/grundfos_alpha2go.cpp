@@ -75,9 +75,8 @@ static const RequestDef REQUESTS[] = {
 
 // ---- EXPERIMENTELL: Schreibtests ----
 void GrundfosAlpha2Go::test_command(uint8_t cmd) {
-  // Erlaubt: 5 STOP, 6 START/AUTO, 7 REMOTE, 8 LOCAL, 66 NIGHT_REDUCT_E, 67 NIGHT_REDUCT_D (kein RESET/BOOT o. ae.)
-  if (!((cmd >= 5 && cmd <= 8) || cmd == 66 || cmd == 67)) {
-    ESP_LOGE(TAG, "test_command(%u) refused - only 5-8, 66, 67 allowed", cmd);
+  if (cmd < 5 || cmd > 8) {  // keine RESET/FACTORY_BOOT/USER_BOOT o. ae.
+    ESP_LOGE(TAG, "test_command(%u) refused - only 5 STOP, 6 START/AUTO, 7 REMOTE, 8 LOCAL allowed", cmd);
     return;
   }
   uint8_t f[geni::MAX_TX_FRAME + 4];
@@ -87,11 +86,11 @@ void GrundfosAlpha2Go::test_command(uint8_t cmd) {
   this->queue_write_(f, n, label);
 }
 
-void GrundfosAlpha2Go::test_set_night_setback(bool enabled, bool with_header) {
+void GrundfosAlpha2Go::test_set_night_setback(bool enabled) {
   const uint8_t v = enabled ? 1 : 0;
   uint8_t f[geni::MAX_TX_FRAME + 4];
-  const size_t n = geni::build_object_set(f, 90, 8, geni::TYPE_AUTONIGHT_ENABLE, 1, &v, 1, with_header);
-  this->queue_write_(f, n, with_header ? "SET 90/8 variant A" : "SET 90/8 variant B");
+  const size_t n = geni::build_object_set(f, 90, 8, geni::TYPE_AUTONIGHT_ENABLE, 1, &v, 1);
+  this->queue_write_(f, n, enabled ? "SET 90/8 = 1" : "SET 90/8 = 0");
 }
 
 void GrundfosAlpha2Go::test_raw_class10(const std::vector<uint8_t> &apdu) {

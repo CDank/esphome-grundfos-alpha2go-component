@@ -66,16 +66,15 @@ inline size_t build_object_get(uint8_t *out, uint8_t obj_id, uint16_t sub_id) {
   return finish_frame(out);
 }
 
-// EXPERIMENTELL - Class-10-Objekt schreiben. Format nicht belegt (kein Mitschnitt der App), daher zwei Varianten:
-//   A: 27 LE E7 F8 0A <0x80|n> <ID> <SubHi> <SubLo> 00 <TypHi> <TypLo> <Ver> 00 00 <DatenLen> <Daten> CRC
-//      (Objektkopf wie in den Antworten der Pumpe)
-//   B: 27 LE E7 F8 0A <0x80|n> <ID> <SubHi> <SubLo> <Daten> CRC
-// OS-Bits (obere 2 Bit des APDU-Kopfs): 00 = GET, 10 = SET (GENI-Konvention). Max. 20 Byte pro BLE-Write.
-// Rueckgabe: Framelaenge, 0 wenn zu lang.
+// Class-10-Objekt schreiben (an der ALPHA2 GO bestaetigt, Antwort 0A 01 00 = Status OK):
+//   27 LE E7 F8 0A <0x80|n> <ID> <SubHi> <SubLo> <TypHi> <TypLo> <Ver> 00 00 <DatenLen> <Daten> CRC
+// Objektkopf wie in den GET-Antworten, aber ohne das fuehrende Statusbyte. OS-Bits 10 = SET.
+// Status in der Antwort (erstes Datenbyte): 00 OK, 01 Operation unbekannt (OS 01), 04 Objekt/Typ nicht gefunden.
+// Max. 20 Byte pro BLE-Write -> hoechstens 3 Datenbytes. Rueckgabe: Framelaenge, 0 wenn zu lang.
 static constexpr size_t MAX_TX_FRAME = 20;
 inline size_t build_object_set(uint8_t *out, uint8_t obj_id, uint16_t sub_id, uint16_t type, uint8_t version,
-                               const uint8_t *data, uint8_t len, bool with_header) {
-  const size_t apdu = 3 + (with_header ? 7 : 0) + len;
+                               const uint8_t *data, uint8_t len) {
+  const size_t apdu = 3 + 6 + len;
   if (apdu > 0x3F || 6 + apdu + 2 > MAX_TX_FRAME) return 0;
   out[0] = SD_REQUEST;
   out[1] = (uint8_t) (4 + apdu);  // DA, SA, Klasse, APDU-Kopf + APDU-Daten
@@ -87,15 +86,12 @@ inline size_t build_object_set(uint8_t *out, uint8_t obj_id, uint16_t sub_id, ui
   out[i++] = obj_id;
   out[i++] = (uint8_t) (sub_id >> 8);
   out[i++] = (uint8_t) (sub_id & 0xFF);
-  if (with_header) {
-    out[i++] = 0x00;
-    out[i++] = (uint8_t) (type >> 8);
-    out[i++] = (uint8_t) (type & 0xFF);
-    out[i++] = version;
-    out[i++] = 0x00;
-    out[i++] = 0x00;
-    out[i++] = len;
-  }
+  out[i++] = (uint8_t) (type >> 8);
+  out[i++] = (uint8_t) (type & 0xFF);
+  out[i++] = version;
+  out[i++] = 0x00;
+  out[i++] = 0x00;
+  out[i++] = len;
   for (uint8_t k = 0; k < len; k++) out[i++] = data[k];
   return finish_frame(out);
 }
@@ -115,7 +111,7 @@ inline size_t build_class10_raw(uint8_t *out, const uint8_t *apdu, size_t n) {
 
 // Class-3-Befehl (klassisches GENIbus-Format): 27 05 E7 F8 03 81 <Befehl> CRC
 // OS = 10 (SET), APDU-Laenge 1. Befehle laut Profil: 5 STOP, 6 START/AUTO, 7 REMOTE, 8 LOCAL,
-// 66 NIGHT_REDUCT_E / 67 NIGHT_REDUCT_D (AutoNight ein/aus).
+// 66/67 (NIGHT_REDUCT_E/D) lehnt die ALPHA2 GO ab: Antwort 03 81 <cmd> = ACK 10 (ID unbekannt).
 static constexpr uint8_t CLASS_COMMAND = 0x03;
 inline size_t build_command(uint8_t *out, uint8_t cmd, uint8_t da = ADDR_PUMP) {
   out[0] = SD_REQUEST;

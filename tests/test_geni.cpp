@@ -171,21 +171,19 @@ int main() {
     }
   }
 
-  // Experimenteller SET-Builder: Aufbau, Laengenfeld und CRC (Struktur, keine Referenz der App vorhanden)
+  // SET-Builder gegen das Telegramm, das die Pumpe mit Status 00 angenommen hat (Probe 4, 90/8 = 0)
   {
-    const uint8_t on = 1;
+    const uint8_t off = 0, on = 1;
     uint8_t f[MAX_TX_FRAME + 4];
-    size_t n = build_object_set(f, 90, 8, TYPE_AUTONIGHT_ENABLE, 1, &on, 1, true);
-    const uint8_t a[] = {0x27, 0x0F, 0xE7, 0xF8, 0x0A, 0x8B, 0x5A, 0x00, 0x08,
-                         0x00, 0x01, 0x4D, 0x01, 0x00, 0x00, 0x01, 0x01};
-    assert(n == 19 && memcmp(f, a, sizeof(a)) == 0);
-    assert(crc16(f + 1, f[1] + 1) == (uint16_t) ((f[n - 2] << 8) | f[n - 1]));
-    n = build_object_set(f, 90, 8, TYPE_AUTONIGHT_ENABLE, 1, &on, 1, false);
-    const uint8_t b[] = {0x27, 0x08, 0xE7, 0xF8, 0x0A, 0x84, 0x5A, 0x00, 0x08, 0x01};
-    assert(n == 12 && memcmp(f, b, sizeof(b)) == 0);
-    assert(crc16(f + 1, f[1] + 1) == (uint16_t) ((f[n - 2] << 8) | f[n - 1]));
+    size_t n = build_object_set(f, 90, 8, TYPE_AUTONIGHT_ENABLE, 1, &off, 1);
+    const uint8_t ref[] = {0x27, 0x0E, 0xE7, 0xF8, 0x0A, 0x8A, 0x5A, 0x00, 0x08,
+                           0x01, 0x4D, 0x01, 0x00, 0x00, 0x01, 0x00, 0xF1, 0xFC};
+    assert(n == sizeof(ref) && memcmp(f, ref, n) == 0);
+    n = build_object_set(f, 90, 8, TYPE_AUTONIGHT_ENABLE, 1, &on, 1);
+    assert(n == 18 && f[15] == 0x01 && crc16(f + 1, f[1] + 1) == (uint16_t) ((f[n - 2] << 8) | f[n - 1]));
     uint8_t big[16] = {0};
-    assert(build_object_set(f, 86, 6, 303, 1, big, 7, true) == 0);  // 21 Byte -> zu lang fuer einen BLE-Write
+    assert(build_object_set(f, 1, 1, 1, 1, big, 3) == 20);
+    assert(build_object_set(f, 86, 6, 303, 1, big, 7) == 0);  // 24 Byte -> zu lang fuer einen BLE-Write
   }
 
   // Class-3-Befehl STOP: 27 05 E7 F8 03 81 05 CRC (9 Byte)
@@ -197,14 +195,14 @@ int main() {
     assert(crc16(f + 1, f[1] + 1) == (uint16_t) ((f[7] << 8) | f[8]));
   }
 
-  // Roh-APDU: muss mit dem SET-Builder (Variante B) und dem GET-Builder uebereinstimmen; leer/zu lang -> 0
+  // Roh-APDU: muss mit dem SET- und dem GET-Builder uebereinstimmen; leer/zu lang -> 0
   {
     uint8_t f[MAX_TX_FRAME + 4], g[MAX_TX_FRAME + 4];
-    const uint8_t apdu[] = {0x84, 0x5A, 0x00, 0x08, 0x01};
-    const uint8_t on = 1;
+    const uint8_t apdu[] = {0x8A, 0x5A, 0x00, 0x08, 0x01, 0x4D, 0x01, 0x00, 0x00, 0x01, 0x00};
+    const uint8_t off = 0;
     size_t n = build_class10_raw(f, apdu, sizeof(apdu));
-    size_t m = build_object_set(g, 90, 8, TYPE_AUTONIGHT_ENABLE, 1, &on, 1, false);
-    assert(n == 12 && n == m && memcmp(f, g, n) == 0);
+    size_t m = build_object_set(g, 90, 8, TYPE_AUTONIGHT_ENABLE, 1, &off, 1);
+    assert(n == 18 && n == m && memcmp(f, g, n) == 0);
     const uint8_t get[] = {0x03, 0x5A, 0x00, 0x08};
     uint8_t h[16];
     build_object_get(h, 90, 8);
