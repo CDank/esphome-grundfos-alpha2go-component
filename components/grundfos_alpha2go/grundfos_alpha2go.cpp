@@ -257,7 +257,7 @@ void GrundfosAlpha2Go::gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_g
   } else {
     // Beobachtet an HK1: Direkt nach einer Trennung (ESP oder App) lehnt die Pumpe die Verschluesselung oft mit
     // reason 82 ab, obwohl der Bond besteht. Ein Druck auf die Bluetooth-Taste behebt das sofort; teils klappt es
-    // auch ohne Tastendruck bei einem spaeteren Versuch (Dauer noch nicht ermittelt).
+    // ohne Tastendruck nach ca. 1 min Pause (an HK1 geprueft).
     this->auth_failed_ = true;
     this->auth_fail_count_++;
     ESP_LOGW(TAG, "[%s] Encryption rejected (reason=%d, attempt %u). Common right after a disconnect; the ESP retries "
