@@ -58,6 +58,7 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
   void test_command(uint8_t cmd);                               // Class 3; nur 5 STOP, 6 START/AUTO, 7 REMOTE, 8 LOCAL
   void test_set_night_setback(bool enabled);                    // Class-10-SET auf 90/8
   void test_set_operation(uint8_t source, uint8_t mode, uint8_t control, float setpoint);  // SET 86/6 (24 Byte, 2 Writes)
+  void test_system_venting(bool start);                         // SET 88/612: 1 StartManual, 0 Stop
   void test_raw_class10(const std::vector<uint8_t> &apdu);     // beliebige Class-10-APDU (Kopfbyte + Daten)
   void setup() override;
   void loop() override;

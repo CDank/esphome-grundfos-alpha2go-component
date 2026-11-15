@@ -110,6 +110,15 @@ void GrundfosAlpha2Go::test_set_operation(uint8_t source, uint8_t mode, uint8_t 
   this->queue_write_(f, n, label);
 }
 
+void GrundfosAlpha2Go::test_system_venting(bool start) {
+  // 88/612 SystemAirVentingCommandAndStatus (Typ 971 v1): u8 cmd (0 Stop, 1 StartManual), u8 state, u16 progress,
+  // u8 algorithm_state -> nur cmd ist relevant, Rest 0. 22 Byte -> zwei BLE-Writes.
+  const uint8_t d[5] = {(uint8_t) (start ? 1 : 0), 0, 0, 0, 0};
+  uint8_t f[geni::MAX_TX_FRAME + 4];
+  const size_t n = geni::build_object_set(f, 88, 612, geni::TYPE_AIR_VENTING_STATUS, 1, d, sizeof(d));
+  this->queue_write_(f, n, start ? "SET 88/612 cmd=StartManual" : "SET 88/612 cmd=Stop");
+}
+
 void GrundfosAlpha2Go::test_raw_class10(const std::vector<uint8_t> &apdu) {
   uint8_t f[geni::MAX_TX_FRAME + 4];
   const size_t n = geni::build_class10_raw(f, apdu.data(), apdu.size());
@@ -135,7 +144,7 @@ void GrundfosAlpha2Go::finish_write_(const char *why) {
   ESP_LOGW(TAG, "Test write finished (%s) - reading back status", why);
   this->inflight_ = false;
   this->last_req_ = 0;
-  this->pending_mask_ |= REQ_OP_LOCAL | REQ_OP_PRIO | REQ_OP_REALIZED | REQ_NIGHT_ENABLE | REQ_ELECTRIC;
+  this->pending_mask_ |= REQ_OP_LOCAL | REQ_OP_PRIO | REQ_OP_REALIZED | REQ_NIGHT_ENABLE | REQ_ELECTRIC | REQ_VENTING;
 }
 
 const char *GrundfosAlpha2Go::req_name_(uint16_t req) {
