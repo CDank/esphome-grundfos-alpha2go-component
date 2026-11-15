@@ -3,7 +3,7 @@
 Externe ESPHome-Komponente `grundfos_alpha2go` für die **ALPHA2 GO**. Die in ESPHome enthaltene `alpha3`-Komponente passt nicht:
 Sie fragt für Flow/Head ein Objekt ab (93/289), das nur die ursprüngliche ALPHA3 hat, und erwartet die ALPHA3-Antwortkennungen.
 
-**Status:** Auf einer ALPHA2 GO getestet, Lesen funktioniert. Alle 10 s kommen vier Antworten ohne Timeouts oder CRC-Fehler, alle Werte erscheinen in Home Assistant.
+**Status:** Auf einer ALPHA2 GO getestet, Lesen und Schreiben (Bedienelemente) funktionieren. Alle 10 s kommen vier Antworten ohne Timeouts oder CRC-Fehler, alle Werte erscheinen in Home Assistant.
 Kompiliert mit ESPHome 2026.10.2 (ESP-IDF und Arduino). Die Firmware-Version der Testpumpe ist nicht bestimmt.
 Das Protokoll stammt aus der Grundfos-GO-APK und dem Mitschnitt von `Lasse-source/esphome-grundfos-alpha2-go`. Die Verbindungsreihenfolge ist daraus übernommen.
 
@@ -254,7 +254,7 @@ button:
 |---|---|---|---|
 | `switch.pump` | Ein = Betriebsart Auto, Aus = Stopp. Zustand aus 86/6. | Class 3 START (6) / STOP (5) | ✅ |
 | `switch.night_setback` | Nachtabsenkung (AutoNight) ein/aus | SET 90/8 | ✅ |
-| `switch.air_detection` | kontinuierliche Lufterkennung ein/aus. Die übrigen Werte aus 88/600 werden unverändert zurückgeschrieben. | SET 88/600 (25 Byte) | ❌ noch nicht |
+| `switch.air_detection` | kontinuierliche Lufterkennung ein/aus. Die übrigen Werte aus 88/600 werden unverändert zurückgeschrieben. | SET 88/600 (25 Byte) | ✅ |
 | `select.control_mode` | Prop. Druck, Konstantdruck, beide mit AutoAdapt, Konstanter Förderstrom, Konstantdrehzahl | SET 86/6 | ✅ alle sechs |
 | `number.setpoint_head` | Sollwert in m, nur bei Prop. Druck und Konstantdruck | SET 86/6 | ✅ |
 | `number.setpoint_flow` | Sollwert in m³/h, nur bei Konstantem Förderstrom | SET 86/6 | ✅ |
@@ -286,7 +286,6 @@ Hinweise:
 
 ## Offen
 
-- Noch nicht an der Pumpe geprüft: Schalter Lufterkennung.
 - 86/9 (`temporary_operation_control_obj`) enthält im Ruhezustand Quelle 0, Auto, Konstantdrehzahl, 5225 1/min, also genau die Drehzahl der Pumpenentlüftung. Vermutlich die Vorgabe für „Nur Pumpe entlüften“; noch nicht beschrieben.
 - „Nur Pumpe entlüften“ lässt sich nicht starten. Dafür ist in der App kein Objekt zu finden; die Funktion ist nur als Steuerquelle 111 in 86/8 sichtbar.
 - Ungeprüft: andere Firmware-Stände, andere ALPHA2-GO-Varianten.
