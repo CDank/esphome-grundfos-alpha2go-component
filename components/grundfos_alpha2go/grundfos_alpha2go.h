@@ -38,6 +38,7 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
   SUB_SENSOR(setpoint)        // 86/7 set_point, Rohwert in SI (Pa bzw. m3/s)
   SUB_SENSOR(setpoint_head)   // 86/7 set_point in m, nur bei Druck-Regelarten
   SUB_SENSOR(setpoint_flow)   // 86/7 set_point in m3/h, nur bei Durchfluss-Regelart
+  SUB_SENSOR(setpoint_speed)  // 86/7 set_point in 1/min, nur bei Konstantdrehzahl
   SUB_SENSOR(setpoint_actual) // 86/8 momentaner Zielwert in m, nur bei Druck-Regelarten
   SUB_TEXT_SENSOR(operation_mode)  // Klartext zu operation_mode
   SUB_TEXT_SENSOR(control_mode)    // Klartext zu control_mode

@@ -42,6 +42,7 @@ void GrundfosAlpha2Go::dump_config() {
   LOG_SENSOR("  ", "Setpoint (raw, SI)", this->setpoint_sensor_);
   LOG_SENSOR("  ", "Setpoint head", this->setpoint_head_sensor_);
   LOG_SENSOR("  ", "Setpoint flow", this->setpoint_flow_sensor_);
+  LOG_SENSOR("  ", "Setpoint speed", this->setpoint_speed_sensor_);
   LOG_SENSOR("  ", "Setpoint actual", this->setpoint_actual_sensor_);
   LOG_TEXT_SENSOR("  ", "Operation mode text", this->operation_mode_text_sensor_);
   LOG_TEXT_SENSOR("  ", "Control mode text", this->control_mode_text_sensor_);
@@ -89,8 +90,8 @@ static const char *operation_mode_name(uint8_t v) {
   return m != nullptr ? m->name : "?";
 }
 
-// Regelart (Enum ControlMode). kind: Einheit des set_point -> 0 unbekannt, 1 Druck (Pa), 2 Durchfluss (m3/s)
-enum SetpointKind : uint8_t { SP_UNKNOWN = 0, SP_PRESSURE = 1, SP_FLOW = 2 };
+// Regelart (Enum ControlMode). kind: Einheit des set_point -> Druck (Pa), Durchfluss (m3/s), Drehzahl (1/min)
+enum SetpointKind : uint8_t { SP_UNKNOWN = 0, SP_PRESSURE = 1, SP_FLOW = 2, SP_SPEED = 3 };
 struct ControlModeDef {
   uint8_t code;
   const char *name;
@@ -100,7 +101,7 @@ struct ControlModeDef {
 static const ControlModeDef CONTROL_MODES[] = {
     {0, "ConstantPressure", "Konstantdruck", SP_PRESSURE},
     {1, "ProportionalPressure", "Proportionaldruck", SP_PRESSURE},  // Pa an HK1 verifiziert
-    {2, "ConstantSpeed", "Konstantdrehzahl", SP_UNKNOWN},
+    {2, "ConstantSpeed", "Konstantdrehzahl", SP_SPEED},  // 1/min an HK1 verifiziert
     {5, "AutoAdapt", "AutoAdapt", SP_PRESSURE},
     {6, "ConstantTemperature", "Konstanttemperatur", SP_UNKNOWN},
     {7, "ClosedLoopSensor", "Sensorregelung", SP_UNKNOWN},
@@ -145,7 +146,8 @@ void GrundfosAlpha2Go::setup() {
   // 86/6 und 86/8 nur zum Vergleich im Log; die Sensoren kommen aus 86/7
   if (this->operation_mode_sensor_ != nullptr || this->control_mode_sensor_ != nullptr ||
       this->setpoint_sensor_ != nullptr || this->setpoint_head_sensor_ != nullptr ||
-      this->setpoint_flow_sensor_ != nullptr || this->setpoint_actual_sensor_ != nullptr ||
+      this->setpoint_flow_sensor_ != nullptr || this->setpoint_speed_sensor_ != nullptr ||
+      this->setpoint_actual_sensor_ != nullptr ||
       this->operation_mode_text_sensor_ != nullptr || this->control_mode_text_sensor_ != nullptr)
     this->wanted_mask_ |= REQ_OP_LOCAL | REQ_OP_PRIO | REQ_OP_REALIZED;
 }
@@ -191,6 +193,7 @@ void GrundfosAlpha2Go::publish_all_nan_() {
                            this->setpoint_sensor_,
                            this->setpoint_head_sensor_,
                            this->setpoint_flow_sensor_,
+                           this->setpoint_speed_sensor_,
                            this->setpoint_actual_sensor_};
   for (auto *s : all)
     if (s != nullptr) s->publish_state(NAN);
@@ -448,6 +451,7 @@ void GrundfosAlpha2Go::handle_reply_(const geni::Reply &r) {
         // Sensoren mit fester Einheit; gilt die Einheit fuer die aktuelle Regelart nicht, wird NaN gemeldet
         this->publish_or_nan_(this->setpoint_head_sensor_, kind == SP_PRESSURE ? sp / PA_PER_M : NAN);
         this->publish_or_nan_(this->setpoint_flow_sensor_, kind == SP_FLOW ? sp * 3600.0f : NAN);
+        this->publish_or_nan_(this->setpoint_speed_sensor_, kind == SP_SPEED ? sp : NAN);
         auto *om = operation_mode_def(mode);
         auto *cm = control_mode_def(ctrl);
         char buf[24];

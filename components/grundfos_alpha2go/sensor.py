@@ -45,6 +45,7 @@ CONF_CONTROL_MODE_SENSOR = "control_mode"
 CONF_SETPOINT_SENSOR = "setpoint"
 CONF_SETPOINT_HEAD = "setpoint_head"
 CONF_SETPOINT_FLOW = "setpoint_flow"
+CONF_SETPOINT_SPEED = "setpoint_speed"
 CONF_SETPOINT_ACTUAL = "setpoint_actual"
 CONF_OPERATION_MODE_TEXT = "operation_mode_text"
 CONF_CONTROL_MODE_TEXT = "control_mode_text"
@@ -166,6 +167,13 @@ CONFIG_SCHEMA = (
                 icon="mdi:target",
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
+            # Sollwert als Drehzahl; NaN, wenn die Regelart nicht Konstantdrehzahl ist
+            cv.Optional(CONF_SETPOINT_SPEED): sensor.sensor_schema(
+                unit_of_measurement=UNIT_REVOLUTIONS_PER_MINUTE,
+                accuracy_decimals=0,
+                icon="mdi:target",
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
             # Momentaner Zielwert (86/8), z. B. Punkt auf der Proportionaldruck-Kurve
             cv.Optional(CONF_SETPOINT_ACTUAL): sensor.sensor_schema(
                 unit_of_measurement=UNIT_METER,
@@ -212,6 +220,7 @@ async def to_code(config):
     await sensors(CONF_SETPOINT_SENSOR, var.set_setpoint_sensor)
     await sensors(CONF_SETPOINT_HEAD, var.set_setpoint_head_sensor)
     await sensors(CONF_SETPOINT_FLOW, var.set_setpoint_flow_sensor)
+    await sensors(CONF_SETPOINT_SPEED, var.set_setpoint_speed_sensor)
     await sensors(CONF_SETPOINT_ACTUAL, var.set_setpoint_actual_sensor)
 
     if conf := config.get(CONF_OPERATION_MODE_TEXT):

@@ -56,16 +56,16 @@ Messwerte von der Testpumpe (Heizkreis, Dauerbetrieb):
 | `control_mode` / `control_mode_text` | Code / Text | 86/7 @2 | 1 / „Proportionaldruck“ |
 | `setpoint_head` | m | 86/7 @3 (Pa ÷ 9806,65) | 2,50 (bei Proportionaldruck) |
 | `setpoint_flow` | m³/h | 86/7 @3 (m³/s × 3600) | 1,00 (bei Konstantem Durchfluss) |
+| `setpoint_speed` | 1/min | 86/7 @3 | 4060 (bei Konstantdrehzahl) |
 | `setpoint_actual` | m | 86/8 @3 (Pa ÷ 9806,65) | 2,09–2,11 (Punkt auf der Kurve) |
 | `setpoint` | SI-Rohwert | 86/7 @3 | 24 509,8 Pa / 0,000278 m³/s |
 
 `energy` ist der Zähler der Pumpe selbst (wie „Kumulierte Leistungsaufnahme“ in der App), kein aus der Leistung integrierter Wert.
 
 **Sollwert:** Die Pumpe liefert ihn in SI-Einheiten, abhängig von der Regelart. Weil ein Sensor in Home Assistant eine feste Einheit braucht, gibt es getrennte Sensoren:
-`setpoint_head` gilt bei Druck-Regelarten (Konstant-/Proportionaldruck, Konstant-/Proportional-Differenzdruck, AutoAdapt), `setpoint_flow` bei Konstantem Durchfluss und FlowAdapt. Der jeweils andere steht dann auf „unbekannt“ (NaN).
+`setpoint_head` gilt bei Druck-Regelarten (Konstant-/Proportionaldruck, Konstant-/Proportional-Differenzdruck, AutoAdapt), `setpoint_flow` bei Konstantem Durchfluss und FlowAdapt, `setpoint_speed` bei Konstantdrehzahl. Die jeweils anderen stehen dann auf „unbekannt“ (NaN).
 `setpoint_actual` ist der momentane Zielwert, den die Pumpe gerade ausregelt: bei Proportionaldruck der Punkt auf der Kurve beim aktuellen Durchfluss, er liegt nah an der tatsächlichen Förderhöhe.
-Für Konstantdrehzahl ist die Einheit noch unbekannt; dort bleibt nur der Rohwert `setpoint`.
-Verifiziert sind Proportionaldruck (Pa) und Konstanter Durchfluss (m³/s); bei AutoAdapt und den übrigen Druck-Regelarten ist Pa angenommen.
+Verifiziert sind Proportionaldruck (Pa), Konstanter Durchfluss (m³/s) und Konstantdrehzahl (1/min); bei AutoAdapt und den übrigen Druck-Regelarten ist Pa angenommen.
 
 Codes für `operation_mode`: 0 = Auto, 1 = Stopp, 2 = Min, 3 = Max, 4 = Benutzerdefiniert, 7 = Hand, 8 = Standby.
 Codes für `control_mode`: 0 = Konstantdruck, 1 = Proportionaldruck, 2 = Konstantdrehzahl, 5 = AutoAdapt, 8 = Konstanter Durchfluss, 10 = FlowAdapt, 13 = AutoAdapt Heizkörper, 14 = AutoAdapt Fußboden, 15 = AutoAdapt Heizkörper + Fußboden, 254 = keine.
@@ -151,7 +151,7 @@ Nur @0, @8 und @24 sind als Sensoren verfügbar, die übrigen Felder erscheinen 
 | @0 | `control_source` (0 = nicht verwendet, 1 = Panel, 2 = Bus, 104 = AutoNight, …) | ✅ 86/6: 0, 86/7 und 86/8: 1 |
 | @1 | `operation_mode` | ✅ 0 = Auto |
 | @2 | `control_mode` | ✅ 1 = Proportionaldruck, 8 = Konstanter Durchfluss |
-| @3 | `set_point`, float in SI | ✅ Pa bzw. m³/s |
+| @3 | `set_point`, float | ✅ Pa, m³/s bzw. 1/min je nach Regelart |
 
 86/6 ist die lokale Anforderung (App/Taste), 86/7 die priorisierte Anforderung nach Bewertung von lokal/remote/Alarm, 86/8 die tatsächlich umgesetzte Anforderung.
 Bei Proportionaldruck enthalten 86/6 und 86/7 den eingestellten Sollwert (24 509,8 Pa = 2,50 m), 86/8 den momentanen Punkt auf der Kurve (≈ 20 500 Pa = 2,09 m, schwankt mit dem Durchfluss). Bei Konstantem Durchfluss sind alle drei gleich.
@@ -188,7 +188,7 @@ cl /std:c++17 /EHsc /I components\grundfos_alpha2go tests\test_geni.cpp /Fe:t.ex
 
 ## Offen
 
-- **Sollwert-Einheit** bei Konstantdrehzahl unbekannt; bei AutoAdapt angenommen (Pa), nicht geprüft.
+- **Sollwert-Einheit** bei AutoAdapt angenommen (Pa), nicht geprüft.
 - **Schreiben** (Sollwert, Regelart) ist nicht implementiert. Laut Profil sind 86/6 und 86/10 (Typ 303) beschreibbar, aber das Format der SET-Anfrage steht nicht in der App-APK (nur im fehlenden Dart-Code). Dafür wird ein Bluetooth-Mitschnitt der GO-App beim Ändern des Sollwerts gebraucht.
 - Ungeprüft: Bond nach ESP-Neustart, andere Firmware-Stände, andere ALPHA2-GO-Varianten.
 

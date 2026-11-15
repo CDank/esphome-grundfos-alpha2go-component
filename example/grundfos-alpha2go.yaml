@@ -75,10 +75,12 @@ sensor:
       name: "Pumpe Betriebsart"
     control_mode_text:
       name: "Pumpe Regelart"
-    # Sollwert: je nach Regelart in m oder m3/h, der andere Sensor ist dann "unbekannt"
+    # Sollwert: je nach Regelart in m, m3/h oder 1/min, die anderen Sensoren sind dann "unbekannt"
     setpoint_head:
       name: "Pumpe Sollwert Förderhöhe"
     setpoint_flow:
       name: "Pumpe Sollwert Durchfluss"
+    setpoint_speed:
+      name: "Pumpe Sollwert Drehzahl"
     setpoint_actual:
       name: "Pumpe Zielwert aktuell"
