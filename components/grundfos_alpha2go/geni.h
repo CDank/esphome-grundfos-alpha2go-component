@@ -100,6 +100,20 @@ inline size_t build_object_set(uint8_t *out, uint8_t obj_id, uint16_t sub_id, ui
   return finish_frame(out);
 }
 
+// Class-3-Befehl (klassisches GENIbus-Format): 27 05 E7 F8 03 81 <Befehl> CRC
+// OS = 10 (SET), APDU-Laenge 1. Befehle laut Profil: 5 STOP, 6 START/AUTO, 7 REMOTE, 8 LOCAL.
+static constexpr uint8_t CLASS_COMMAND = 0x03;
+inline size_t build_command(uint8_t *out, uint8_t cmd, uint8_t da = ADDR_PUMP) {
+  out[0] = SD_REQUEST;
+  out[1] = 5;
+  out[2] = da;
+  out[3] = ADDR_CLIENT;
+  out[4] = CLASS_COMMAND;
+  out[5] = 0x81;
+  out[6] = cmd;
+  return finish_frame(out);
+}
+
 // Class-2-Werte lesen (Erstabfrage der App): 27 LE FF F8 02 <n> <id>... CRC
 inline size_t build_class2_get(uint8_t *out, const uint8_t *ids, uint8_t n, uint8_t da = ADDR_BROADCAST) {
   out[0] = SD_REQUEST;

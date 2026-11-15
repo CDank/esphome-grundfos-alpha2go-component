@@ -188,5 +188,14 @@ int main() {
     assert(build_object_set(f, 86, 6, 303, 1, big, 7, true) == 0);  // 21 Byte -> zu lang fuer einen BLE-Write
   }
 
+  // Class-3-Befehl STOP: 27 05 E7 F8 03 81 05 CRC (9 Byte)
+  {
+    uint8_t f[16];
+    size_t n = build_command(f, 5);
+    const uint8_t s[] = {0x27, 0x05, 0xE7, 0xF8, 0x03, 0x81, 0x05};
+    assert(n == 9 && memcmp(f, s, sizeof(s)) == 0);
+    assert(crc16(f + 1, f[1] + 1) == (uint16_t) ((f[7] << 8) | f[8]));
+  }
+
   printf("alle Tests OK\n");
 }

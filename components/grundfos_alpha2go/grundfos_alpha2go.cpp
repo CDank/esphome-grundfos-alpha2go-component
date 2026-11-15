@@ -73,7 +73,50 @@ static const RequestDef REQUESTS[] = {
     {1 << 12, 88, 612, "88/612"},
 };
 
+// ---- EXPERIMENTELL: Schreibtests ----
+void GrundfosAlpha2Go::test_command(uint8_t cmd) {
+  if (cmd < 5 || cmd > 8) {  // keine RESET/FACTORY_BOOT/USER_BOOT o. ae.
+    ESP_LOGE(TAG, "test_command(%u) refused - only 5 STOP, 6 START/AUTO, 7 REMOTE, 8 LOCAL allowed", cmd);
+    return;
+  }
+  uint8_t f[geni::MAX_TX_FRAME + 4];
+  const size_t n = geni::build_command(f, cmd);
+  char label[24];
+  snprintf(label, sizeof(label), "class 3 command %u", cmd);
+  this->queue_write_(f, n, label);
+}
+
+void GrundfosAlpha2Go::test_set_night_setback(bool enabled, bool with_header) {
+  const uint8_t v = enabled ? 1 : 0;
+  uint8_t f[geni::MAX_TX_FRAME + 4];
+  const size_t n = geni::build_object_set(f, 90, 8, geni::TYPE_AUTONIGHT_ENABLE, 1, &v, 1, with_header);
+  this->queue_write_(f, n, with_header ? "SET 90/8 variant A" : "SET 90/8 variant B");
+}
+
+void GrundfosAlpha2Go::queue_write_(const uint8_t *frame, size_t len, const char *label) {
+  if (this->stage_ != Stage::POLLING) {
+    ESP_LOGW(TAG, "Test write '%s' ignored - pump not connected", label);
+    return;
+  }
+  if (len == 0 || len > sizeof(this->write_buf_)) {
+    ESP_LOGE(TAG, "Test write '%s' ignored - frame too long", label);
+    return;
+  }
+  memcpy(this->write_buf_, frame, len);
+  this->write_len_ = len;
+  ESP_LOGW(TAG, "Test write queued: %s", label);
+}
+
+// Nach Antwort oder Timeout: Wirkung sofort zuruecklesen
+void GrundfosAlpha2Go::finish_write_(const char *why) {
+  ESP_LOGW(TAG, "Test write finished (%s) - reading back status", why);
+  this->inflight_ = false;
+  this->last_req_ = 0;
+  this->pending_mask_ |= REQ_OP_LOCAL | REQ_OP_PRIO | REQ_OP_REALIZED | REQ_NIGHT_ENABLE | REQ_ELECTRIC;
+}
+
 const char *GrundfosAlpha2Go::req_name_(uint16_t req) {
+  if (req == REQ_WRITE) return "SET";
   for (const auto &r : REQUESTS)
     if (r.bit == req) return r.name;
   return "?";
@@ -181,6 +224,7 @@ void GrundfosAlpha2Go::reset_state_() {
   this->inflight_ = false;
   this->last_req_ = 0;
   this->pending_mask_ = 0;
+  this->write_len_ = 0;  // nicht gesendeter Schreibtest verfaellt bei Trennung
   this->system_venting_state_ = 0;
   this->pump_venting_ = false;
   this->rx_.reset();
@@ -323,7 +367,11 @@ void GrundfosAlpha2Go::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
     case ESP_GATTC_NOTIFY_EVT: {
       if (param->notify.handle != this->data_handle_) break;
       ESP_LOGVV(TAG, "RX %d bytes", (int) param->notify.value_len);
-      if (this->inflight_ && (this->last_req_ & REQ_DIAG_MASK))  // auch Antworten, die der Parser verwirft
+      if (this->inflight_ && this->last_req_ == REQ_WRITE) {  // Antwort auf Schreibtest: roh und gut sichtbar loggen
+        ESP_LOGW(TAG, "Test write RX: %s",
+                 format_hex_pretty(param->notify.value, param->notify.value_len).c_str());
+        this->finish_write_("reply received");
+      } else if (this->inflight_ && (this->last_req_ & REQ_DIAG_MASK))  // auch Antworten, die der Parser verwirft
         ESP_LOGV(TAG, "%s raw RX: %s", req_name_(this->last_req_),
                  format_hex_pretty(param->notify.value, param->notify.value_len).c_str());
       int crc_errors = this->rx_.feed(param->notify.value, param->notify.value_len,
@@ -353,7 +401,7 @@ void GrundfosAlpha2Go::write_cccd_() {
 }
 
 void GrundfosAlpha2Go::send_frame_(const uint8_t *frame, size_t len) {
-  uint8_t tmp[16];
+  uint8_t tmp[geni::MAX_TX_FRAME];
   if (len > sizeof(tmp)) return;
   memcpy(tmp, frame, len);
   auto st = esp_ble_gattc_write_char(this->parent_->get_gattc_if(), this->parent_->get_conn_id(), this->data_handle_,
@@ -416,8 +464,20 @@ void GrundfosAlpha2Go::loop() {
     }
     case Stage::POLLING:
       if (this->inflight_ && now - this->t_last_tx_ > REPLY_TIMEOUT_MS) {
-        ESP_LOGD(TAG, "Reply timeout (%s)", req_name_(this->last_req_));
-        this->inflight_ = false;
+        if (this->last_req_ == REQ_WRITE) {
+          this->finish_write_("no reply within 1 s");
+        } else {
+          ESP_LOGD(TAG, "Reply timeout (%s)", req_name_(this->last_req_));
+          this->inflight_ = false;
+        }
+      }
+      if (!this->inflight_ && this->write_len_ != 0 && now - this->t_last_tx_ >= MIN_TX_GAP_MS) {
+        ESP_LOGW(TAG, "Test write TX: %s", format_hex_pretty(this->write_buf_, this->write_len_).c_str());
+        this->last_req_ = REQ_WRITE;
+        this->inflight_ = true;
+        this->send_frame_(this->write_buf_, this->write_len_);
+        this->write_len_ = 0;
+        break;
       }
       if (!this->inflight_ && this->pending_mask_ != 0 && now - this->t_last_tx_ >= MIN_TX_GAP_MS)
         this->send_next_request_();

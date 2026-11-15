@@ -51,6 +51,10 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
   SUB_BINARY_SENSOR(venting_active)         // 88/612 Entlueftung laeuft
 
  public:
+  // EXPERIMENTELL (Branch feature/write-access): Schreibtests, nur auf ausdruecklichen Aufruf (z. B. Template-Button).
+  // Anfrage und Antwort werden roh auf WARN geloggt, danach werden Betriebsstatus und 90/8 sofort zurueckgelesen.
+  void test_command(uint8_t cmd);                               // Class 3; nur 5 STOP, 6 START/AUTO, 7 REMOTE, 8 LOCAL
+  void test_set_night_setback(bool enabled, bool with_header);  // Class-10-SET auf 90/8, Variante A/B
   void setup() override;
   void loop() override;
   void update() override;
@@ -118,6 +122,12 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
   uint16_t last_req_{0};  // zuletzt gesendete Abfrage (es ist immer nur eine unterwegs)
   uint16_t wanted_mask_{0};
   uint16_t pending_mask_{0};
+  // Schreibtest: ein Frame wartet, bis keine Abfrage unterwegs ist
+  static constexpr uint16_t REQ_WRITE = 1u << 15;  // Pseudo-Bit fuer last_req_ (nicht in REQUESTS)
+  void queue_write_(const uint8_t *frame, size_t len, const char *label);
+  void finish_write_(const char *why);
+  uint8_t write_buf_[geni::MAX_TX_FRAME + 4]{};
+  size_t write_len_{0};
   uint8_t update_count_{0};
   uint8_t system_venting_state_{0};  // 88/612: 0 inaktiv, 1 manuell, 2 automatisch
   bool pump_venting_{false};         // 86/8 Steuerquelle AirVenting

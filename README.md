@@ -210,6 +210,56 @@ Mit MSVC (Developer Command Prompt):
 cl /std:c++17 /EHsc /I components\grundfos_alpha2go tests\test_geni.cpp /Fe:t.exe && t.exe
 ```
 
+## Experimentell: Schreibtests (nur Branch `feature/write-access`)
+
+Das Format der Schreibbefehle ist noch nicht an der Pumpe bestätigt. Die Komponente sendet nur, wenn eine der Testmethoden ausdrücklich aufgerufen wird; Anfrage (`Test write TX`) und Antwort (`Test write RX`) werden auf `WARN` roh geloggt, danach liest sie Betriebsstatus (86/6–8), Elektrik (87/69) und Nachtabsenkung (90/8) sofort zurück.
+
+| Methode | Telegramm | Status |
+|---|---|---|
+| `test_command(5)` / `(6)` / `(7)` / `(8)` | Class 3 STOP / START·AUTO / REMOTE / LOCAL: `27 05 E7 F8 03 81 <Befehl> CRC` (klassisches GENIbus-Format) | ungetestet |
+| `test_set_night_setback(true/false, true)` | Class-10-SET 90/8, Variante A (mit Objektkopf) | ungetestet |
+| `test_set_night_setback(true/false, false)` | Class-10-SET 90/8, Variante B (nur Adresse + Daten) | ungetestet |
+
+`test_command` nimmt nur die Befehle 5–8 an (kein RESET, FACTORY_BOOT o. ä.). Rückgängig machen geht jederzeit in der GO-App (ESP vorher trennen).
+
+Einbindung zum Testen (die Komponente braucht eine `id`):
+
+```yaml
+external_components:
+  - source: github://CDank/esphome-grundfos-alpha2go-component@feature/write-access
+    components: [grundfos_alpha2go]
+    refresh: 0s
+
+sensor:
+  - platform: grundfos_alpha2go
+    id: pumpe_go
+    ble_client_id: pumpe
+    # ... Sensoren wie gewohnt ...
+
+button:
+  - platform: template
+    name: "Pumpe TEST Stopp"
+    on_press: [lambda: "id(pumpe_go).test_command(5);"]
+  - platform: template
+    name: "Pumpe TEST Start (Auto)"
+    on_press: [lambda: "id(pumpe_go).test_command(6);"]
+  - platform: template
+    name: "Pumpe TEST Lokal"
+    on_press: [lambda: "id(pumpe_go).test_command(8);"]
+  - platform: template
+    name: "Pumpe TEST Nachtabsenkung EIN (A)"
+    on_press: [lambda: "id(pumpe_go).test_set_night_setback(true, true);"]
+  - platform: template
+    name: "Pumpe TEST Nachtabsenkung AUS (A)"
+    on_press: [lambda: "id(pumpe_go).test_set_night_setback(false, true);"]
+  - platform: template
+    name: "Pumpe TEST Nachtabsenkung EIN (B)"
+    on_press: [lambda: "id(pumpe_go).test_set_night_setback(true, false);"]
+  - platform: template
+    name: "Pumpe TEST Nachtabsenkung AUS (B)"
+    on_press: [lambda: "id(pumpe_go).test_set_night_setback(false, false);"]
+```
+
 ## Offen
 
 - **Schreiben** (Sollwert, Regelart) ist nicht implementiert. Laut Profil sind 86/6 und 86/10 (Typ 303) beschreibbar, aber das Format der SET-Anfrage steht nicht in der App-APK (nur im fehlenden Dart-Code). Dafür wird ein Bluetooth-Mitschnitt der GO-App beim Ändern des Sollwerts gebraucht.
