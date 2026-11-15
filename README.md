@@ -78,7 +78,7 @@ Bei einem Verbindungsabbruch gehen alle Sensoren auf `NaN`.
 ## Einrichtung
 
 1. `example/grundfos-alpha2go.yaml` anpassen (`pump_mac`, WLAN).
-2. Flashen. **Beim ersten Verbinden die Bluetooth-Taste an der Pumpe drücken**, sonst `auth fail reason=82`. Der Bond liegt danach im Flash des ESP32.
+2. Flashen. **Beim ersten Verbinden die Bluetooth-Taste an der Pumpe drücken**, sonst `auth fail reason=82`. Der Bond liegt danach im Flash des ESP32 und übersteht Neustarts und OTA-Updates: An der Testpumpe hat sich der ESP nach mehreren OTA-Updates jedes Mal ohne erneuten Tastendruck wieder verbunden.
 3. Die GO-App auf dem Handy schließen. Die Pumpe akzeptiert nur einen Client.
 
 Ablauf pro Verbindung: Verschlüsselung → CCCD schreiben → Erstabfrage der App → Abfragen nacheinander (eine gleichzeitig, 30 ms Abstand, 1 s Timeout).
@@ -190,6 +190,6 @@ cl /std:c++17 /EHsc /I components\grundfos_alpha2go tests\test_geni.cpp /Fe:t.ex
 ## Offen
 
 - **Schreiben** (Sollwert, Regelart) ist nicht implementiert. Laut Profil sind 86/6 und 86/10 (Typ 303) beschreibbar, aber das Format der SET-Anfrage steht nicht in der App-APK (nur im fehlenden Dart-Code). Dafür wird ein Bluetooth-Mitschnitt der GO-App beim Ändern des Sollwerts gebraucht.
-- Ungeprüft: Bond nach ESP-Neustart, andere Firmware-Stände, andere ALPHA2-GO-Varianten.
+- Ungeprüft: andere Firmware-Stände, andere ALPHA2-GO-Varianten.
 
 Lizenz: MIT. Unabhängiges Projekt, nicht von Grundfos.
