@@ -114,7 +114,8 @@ inline size_t build_class10_raw(uint8_t *out, const uint8_t *apdu, size_t n) {
 }
 
 // Class-3-Befehl (klassisches GENIbus-Format): 27 05 E7 F8 03 81 <Befehl> CRC
-// OS = 10 (SET), APDU-Laenge 1. Befehle laut Profil: 5 STOP, 6 START/AUTO, 7 REMOTE, 8 LOCAL.
+// OS = 10 (SET), APDU-Laenge 1. Befehle laut Profil: 5 STOP, 6 START/AUTO, 7 REMOTE, 8 LOCAL,
+// 66 NIGHT_REDUCT_E / 67 NIGHT_REDUCT_D (AutoNight ein/aus).
 static constexpr uint8_t CLASS_COMMAND = 0x03;
 inline size_t build_command(uint8_t *out, uint8_t cmd, uint8_t da = ADDR_PUMP) {
   out[0] = SD_REQUEST;

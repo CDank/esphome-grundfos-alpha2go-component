@@ -75,8 +75,9 @@ static const RequestDef REQUESTS[] = {
 
 // ---- EXPERIMENTELL: Schreibtests ----
 void GrundfosAlpha2Go::test_command(uint8_t cmd) {
-  if (cmd < 5 || cmd > 8) {  // keine RESET/FACTORY_BOOT/USER_BOOT o. ae.
-    ESP_LOGE(TAG, "test_command(%u) refused - only 5 STOP, 6 START/AUTO, 7 REMOTE, 8 LOCAL allowed", cmd);
+  // Erlaubt: 5 STOP, 6 START/AUTO, 7 REMOTE, 8 LOCAL, 66 NIGHT_REDUCT_E, 67 NIGHT_REDUCT_D (kein RESET/BOOT o. ae.)
+  if (!((cmd >= 5 && cmd <= 8) || cmd == 66 || cmd == 67)) {
+    ESP_LOGE(TAG, "test_command(%u) refused - only 5-8, 66, 67 allowed", cmd);
     return;
   }
   uint8_t f[geni::MAX_TX_FRAME + 4];
