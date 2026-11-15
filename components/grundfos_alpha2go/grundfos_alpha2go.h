@@ -101,7 +101,6 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
   void publish_text_(text_sensor::TextSensor *s, const char *value);
   void publish_bin_(binary_sensor::BinarySensor *s, bool value);
   void publish_venting_();
-  void start_reconnect_backoff_();
   void publish_all_nan_();
 
   Stage stage_{Stage::IDLE};
