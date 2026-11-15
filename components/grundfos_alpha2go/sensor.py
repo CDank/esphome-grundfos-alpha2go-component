@@ -62,12 +62,13 @@ CONF_VENTING_ACTIVE = "venting_active"
 
 
 
-def _temp():
+def _temp(entity_category=cv.UNDEFINED):
     return sensor.sensor_schema(
         unit_of_measurement=UNIT_CELSIUS,
         accuracy_decimals=1,
         device_class=DEVICE_CLASS_TEMPERATURE,
         state_class=STATE_CLASS_MEASUREMENT,
+        entity_category=entity_category,
     )
 
 
@@ -96,44 +97,50 @@ CONFIG_SCHEMA = (
                 accuracy_decimals=0,
                 device_class=DEVICE_CLASS_VOLTAGE,
                 state_class=STATE_CLASS_MEASUREMENT,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
             cv.Optional(CONF_DC_VOLTAGE): sensor.sensor_schema(
                 unit_of_measurement=UNIT_VOLT,
                 accuracy_decimals=0,
                 device_class=DEVICE_CLASS_VOLTAGE,
                 state_class=STATE_CLASS_MEASUREMENT,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
             cv.Optional(CONF_CURRENT): sensor.sensor_schema(
                 unit_of_measurement=UNIT_AMPERE,
                 accuracy_decimals=3,
                 device_class=DEVICE_CLASS_CURRENT,
                 state_class=STATE_CLASS_MEASUREMENT,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
             cv.Optional(CONF_SPEED): sensor.sensor_schema(
                 unit_of_measurement=UNIT_REVOLUTIONS_PER_MINUTE,
                 accuracy_decimals=0,
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
-            cv.Optional(CONF_AUX_TEMPERATURE): _temp(),
+            cv.Optional(CONF_AUX_TEMPERATURE): _temp(ENTITY_CATEGORY_DIAGNOSTIC),
             cv.Optional(CONF_MEDIA_TEMPERATURE): _temp(),
-            cv.Optional(CONF_PCB_TEMPERATURE): _temp(),
-            cv.Optional(CONF_CONTROLBOX_TEMPERATURE): _temp(),
+            cv.Optional(CONF_PCB_TEMPERATURE): _temp(ENTITY_CATEGORY_DIAGNOSTIC),
+            cv.Optional(CONF_CONTROLBOX_TEMPERATURE): _temp(ENTITY_CATEGORY_DIAGNOSTIC),
             cv.Optional(CONF_STARTS): sensor.sensor_schema(
                 accuracy_decimals=0,
                 state_class=STATE_CLASS_TOTAL_INCREASING,
                 icon="mdi:counter",
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
             cv.Optional(CONF_OPERATING_HOURS): sensor.sensor_schema(
                 unit_of_measurement=UNIT_HOUR,
                 accuracy_decimals=1,
                 state_class=STATE_CLASS_TOTAL_INCREASING,
                 icon="mdi:timer-outline",
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
             cv.Optional(CONF_POWER_ON_HOURS): sensor.sensor_schema(
                 unit_of_measurement=UNIT_HOUR,
                 accuracy_decimals=1,
                 state_class=STATE_CLASS_TOTAL_INCREASING,
                 icon="mdi:timer-outline",
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
             # Energiezaehler der Pumpe (Objekt 87/1, intern in J)
             cv.Optional(CONF_ENERGY): sensor.sensor_schema(
@@ -165,6 +172,7 @@ CONFIG_SCHEMA = (
                 accuracy_decimals=2,
                 icon="mdi:target",
                 state_class=STATE_CLASS_MEASUREMENT,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
             # Sollwert als Durchfluss; NaN, wenn die Regelart keinen Durchflusssollwert hat
             cv.Optional(CONF_SETPOINT_FLOW): sensor.sensor_schema(
@@ -172,6 +180,7 @@ CONFIG_SCHEMA = (
                 accuracy_decimals=2,
                 icon="mdi:target",
                 state_class=STATE_CLASS_MEASUREMENT,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
             # Sollwert als Drehzahl; NaN, wenn die Regelart nicht Konstantdrehzahl ist
             cv.Optional(CONF_SETPOINT_SPEED): sensor.sensor_schema(
@@ -179,6 +188,7 @@ CONFIG_SCHEMA = (
                 accuracy_decimals=0,
                 icon="mdi:target",
                 state_class=STATE_CLASS_MEASUREMENT,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
             # Momentaner Zielwert (86/8), z. B. Punkt auf der Proportionaldruck-Kurve
             cv.Optional(CONF_SETPOINT_ACTUAL): sensor.sensor_schema(
@@ -186,6 +196,7 @@ CONFIG_SCHEMA = (
                 accuracy_decimals=2,
                 icon="mdi:target-variant",
                 state_class=STATE_CLASS_MEASUREMENT,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
             cv.Optional(CONF_OPERATION_MODE_TEXT): text_sensor.text_sensor_schema(
                 icon="mdi:state-machine",

@@ -82,6 +82,12 @@ Codes für `operation_mode`: 0 = Auto, 1 = Stopp, 2 = Min, 3 = Max, 4 = Benutzer
 Codes für `control_mode`: 0 = Konstantdruck, 1 = Prop. Druck, 2 = Konstantdrehzahl, 8 = Konstanter Förderstrom, 13 = Prop. Druck (AutoAdapt), 14 = Konstantdruck (AutoAdapt); weitere Codes aus dem Profil (5, 10, 15 …) bietet die GO-App für die ALPHA2 GO nicht an.
 Die `_text`-Sensoren liefern dasselbe als deutschen Klartext, angelehnt an die Begriffe der GO-App. Im Log stehen zum Vergleich auch 86/6 (lokale Anforderung) und 86/8.
 
+**Kategorien in Home Assistant** (Voreinstellung, pro Entität mit `entity_category:` überschreibbar):
+- **Sensoren:** Durchfluss, Förderhöhe, Leistung, Drehzahl, Medientemperatur, Energie, Betriebsart und Regelart als Text, Nachtbetrieb, Entlüftung aktiv/Status.
+- **Diagnose:** Spannungen, Strom, Elektroniktemperaturen, Zähler (Starts, Stunden, Lufterkennungen), Zahlencodes und Rohwert, Sollwert-Sensoren, Zielwert aktuell, Nachtabsenkung/Lufterkennung aktiviert.
+- **Steuerung:** Schalter Pumpe.
+- **Konfiguration:** Regelart, Sollwerte, Nachtabsenkung, Lufterkennung, System-Entlüftung starten/stoppen.
+
 Es wird nur angefragt, was konfiguriert ist. Die Antworten werden über den Objekttyp erkannt, nicht über die Version. Dadurch spielt es keine Rolle, ob die Pumpe Typ 256 als v1, v2 oder v3 meldet.
 Bei einem Verbindungsabbruch gehen alle Sensoren auf `NaN`.
 

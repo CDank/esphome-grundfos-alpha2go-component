@@ -2,6 +2,7 @@ import esphome.codegen as cg
 from esphome.components import number
 import esphome.config_validation as cv
 from esphome.const import (
+    ENTITY_CATEGORY_CONFIG,
     CONF_MAX_VALUE,
     CONF_MIN_VALUE,
     CONF_STEP,
@@ -24,7 +25,10 @@ CONF_SETPOINT_SPEED = "setpoint_speed"
 def _setpoint(unit, icon, min_value, max_value, step):
     # Grenzen sind Vorgaben; die tatsaechlichen Grenzen haengen vom Pumpentyp ab und koennen ueberschrieben werden
     return number.number_schema(
-        GrundfosSetpointNumber, unit_of_measurement=unit, icon=icon
+        GrundfosSetpointNumber,
+        unit_of_measurement=unit,
+        icon=icon,
+        entity_category=ENTITY_CATEGORY_CONFIG,
     ).extend(
         {
             cv.Optional(CONF_MIN_VALUE, default=min_value): cv.float_,

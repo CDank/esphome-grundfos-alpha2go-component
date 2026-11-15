@@ -1,6 +1,7 @@
 import esphome.codegen as cg
 from esphome.components import button
 import esphome.config_validation as cv
+from esphome.const import ENTITY_CATEGORY_CONFIG
 
 from . import ButtonKind, CONF_GRUNDFOS_ALPHA2GO_ID, GrundfosAlpha2Go, ns
 
@@ -15,8 +16,12 @@ CONFIG_SCHEMA = cv.Schema(
     {
         cv.GenerateID(CONF_GRUNDFOS_ALPHA2GO_ID): cv.use_id(GrundfosAlpha2Go),
         # System-Entlueftung (88/612) manuell starten / abbrechen
-        cv.Optional(CONF_VENTING_START): button.button_schema(GrundfosButton, icon="mdi:air-filter"),
-        cv.Optional(CONF_VENTING_STOP): button.button_schema(GrundfosButton, icon="mdi:stop-circle-outline"),
+        cv.Optional(CONF_VENTING_START): button.button_schema(
+            GrundfosButton, icon="mdi:air-filter", entity_category=ENTITY_CATEGORY_CONFIG
+        ),
+        cv.Optional(CONF_VENTING_STOP): button.button_schema(
+            GrundfosButton, icon="mdi:stop-circle-outline", entity_category=ENTITY_CATEGORY_CONFIG
+        ),
     }
 )
 

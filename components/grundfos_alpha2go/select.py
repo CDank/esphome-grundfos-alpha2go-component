@@ -1,6 +1,7 @@
 import esphome.codegen as cg
 from esphome.components import select
 import esphome.config_validation as cv
+from esphome.const import ENTITY_CATEGORY_CONFIG
 
 from . import CONF_GRUNDFOS_ALPHA2GO_ID, GrundfosAlpha2Go, ns
 
@@ -24,7 +25,9 @@ CONFIG_SCHEMA = cv.Schema(
     {
         cv.GenerateID(CONF_GRUNDFOS_ALPHA2GO_ID): cv.use_id(GrundfosAlpha2Go),
         cv.Optional(CONF_CONTROL_MODE): select.select_schema(
-            GrundfosControlModeSelect, icon="mdi:tune-vertical"
+            GrundfosControlModeSelect,
+            icon="mdi:tune-vertical",
+            entity_category=ENTITY_CATEGORY_CONFIG,
         ),
     }
 )
