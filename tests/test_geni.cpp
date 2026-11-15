@@ -197,5 +197,22 @@ int main() {
     assert(crc16(f + 1, f[1] + 1) == (uint16_t) ((f[7] << 8) | f[8]));
   }
 
+  // Roh-APDU: muss mit dem SET-Builder (Variante B) und dem GET-Builder uebereinstimmen; leer/zu lang -> 0
+  {
+    uint8_t f[MAX_TX_FRAME + 4], g[MAX_TX_FRAME + 4];
+    const uint8_t apdu[] = {0x84, 0x5A, 0x00, 0x08, 0x01};
+    const uint8_t on = 1;
+    size_t n = build_class10_raw(f, apdu, sizeof(apdu));
+    size_t m = build_object_set(g, 90, 8, TYPE_AUTONIGHT_ENABLE, 1, &on, 1, false);
+    assert(n == 12 && n == m && memcmp(f, g, n) == 0);
+    const uint8_t get[] = {0x03, 0x5A, 0x00, 0x08};
+    uint8_t h[16];
+    build_object_get(h, 90, 8);
+    assert(build_class10_raw(f, get, 4) == 11 && memcmp(f, h, 11) == 0);
+    uint8_t big[14] = {0};
+    assert(build_class10_raw(f, big, 0) == 0 && build_class10_raw(f, big, 14) == 0);
+    assert(build_class10_raw(f, big, 13) == 20);
+  }
+
   printf("alle Tests OK\n");
 }

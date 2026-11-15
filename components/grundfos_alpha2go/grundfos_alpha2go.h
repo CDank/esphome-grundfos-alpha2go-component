@@ -8,6 +8,8 @@
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #include "geni.h"
 
+#include <vector>
+
 #ifdef USE_ESP32
 
 #include <esp_gap_ble_api.h>
@@ -55,6 +57,7 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
   // Anfrage und Antwort werden roh auf WARN geloggt, danach werden Betriebsstatus und 90/8 sofort zurueckgelesen.
   void test_command(uint8_t cmd);                               // Class 3; nur 5 STOP, 6 START/AUTO, 7 REMOTE, 8 LOCAL
   void test_set_night_setback(bool enabled, bool with_header);  // Class-10-SET auf 90/8, Variante A/B
+  void test_raw_class10(const std::vector<uint8_t> &apdu);     // beliebige Class-10-APDU (Kopfbyte + Daten)
   void setup() override;
   void loop() override;
   void update() override;

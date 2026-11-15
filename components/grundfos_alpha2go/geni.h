@@ -100,6 +100,19 @@ inline size_t build_object_set(uint8_t *out, uint8_t obj_id, uint16_t sub_id, ui
   return finish_frame(out);
 }
 
+// EXPERIMENTELL - beliebige Class-10-APDU (Kopfbyte + Daten) senden, fuer Formatproben:
+//   27 LE E7 F8 0A <apdu...> CRC. Rueckgabe: Framelaenge, 0 wenn leer oder zu lang.
+inline size_t build_class10_raw(uint8_t *out, const uint8_t *apdu, size_t n) {
+  if (n == 0 || 5 + n + 2 > MAX_TX_FRAME) return 0;
+  out[0] = SD_REQUEST;
+  out[1] = (uint8_t) (3 + n);
+  out[2] = ADDR_PUMP;
+  out[3] = ADDR_CLIENT;
+  out[4] = CLASS_OBJECT;
+  for (size_t k = 0; k < n; k++) out[5 + k] = apdu[k];
+  return finish_frame(out);
+}
+
 // Class-3-Befehl (klassisches GENIbus-Format): 27 05 E7 F8 03 81 <Befehl> CRC
 // OS = 10 (SET), APDU-Laenge 1. Befehle laut Profil: 5 STOP, 6 START/AUTO, 7 REMOTE, 8 LOCAL.
 static constexpr uint8_t CLASS_COMMAND = 0x03;

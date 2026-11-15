@@ -217,10 +217,13 @@ Das Format der Schreibbefehle ist noch nicht an der Pumpe bestätigt. Die Kompon
 | Methode | Telegramm | Status |
 |---|---|---|
 | `test_command(5)` / `(6)` / `(7)` / `(8)` | Class 3 STOP / START·AUTO / REMOTE / LOCAL: `27 05 E7 F8 03 81 <Befehl> CRC` (klassisches GENIbus-Format) | ✅ STOP und START an HK1 bestätigt (Antwort `24 04 F8 E7 03 00 CRC` = Quittung OK); LOCAL quittiert, ohne sichtbare Wirkung; REMOTE nicht getestet |
-| `test_set_night_setback(true/false, true)` | Class-10-SET 90/8, Variante A (mit Objektkopf) | ungetestet |
-| `test_set_night_setback(true/false, false)` | Class-10-SET 90/8, Variante B (nur Adresse + Daten) | ungetestet |
+| `test_set_night_setback(true/false, true)` | Class-10-SET 90/8, Variante A (mit Objektkopf) | ❌ abgelehnt: Antwort `24 05 F8 E7 0A 01 04 CRC` (Status 04), 90/8 unverändert |
+| `test_set_night_setback(true/false, false)` | Class-10-SET 90/8, Variante B (nur Adresse + Daten) | ❌ abgelehnt, gleiche Antwort (Status 04) |
+| `test_raw_class10({...})` | beliebige Class-10-APDU (Kopfbyte + Daten), für Formatproben | neu |
 
 STOP/START ändern die **lokale** Anforderung (86/6: Betriebsart Stopp/Auto, `control_source` bleibt Panel) – wie eine Änderung in der GO-App; Regelart und Sollwert bleiben erhalten. Die App kann den Zustand danach normal wieder ändern.
+
+**Class-10-Antworten:** Das erste Datenbyte nach dem APDU-Kopf ist ein Statuscode (in der App `GeniClass10StatusCode`). Bei jedem erfolgreichen GET ist er `00`, danach folgen Typ, Version und Daten. Auf beide SET-Varianten antwortet die Pumpe nur mit Status `04` ohne weitere Daten. Was `04` bedeutet, ist noch offen (unbekannte Operation, Format oder Schreibschutz?). Das Profil führt 90/8 als `ReadWrite`.
 
 `test_command` nimmt nur die Befehle 5–8 an (kein RESET, FACTORY_BOOT o. ä.). Rückgängig machen geht jederzeit in der GO-App (ESP vorher trennen).
 
@@ -260,6 +263,22 @@ button:
   - platform: template
     name: "Pumpe TEST Nachtabsenkung AUS (B)"
     on_press: [lambda: "id(pumpe_go).test_set_night_setback(false, false);"]
+  # Formatproben fuer Class 10 (SET-Proben schreiben 0 = aktueller Zustand "Nachtabsenkung aus")
+  - platform: template
+    name: "Pumpe PROBE 1 GET unbekanntes Objekt"
+    on_press: [lambda: "id(pumpe_go).test_raw_class10({0x03, 0x5A, 0x27, 0x0F});"]
+  - platform: template
+    name: "Pumpe PROBE 2 SET unbekanntes Objekt"
+    on_press: [lambda: "id(pumpe_go).test_raw_class10({0x84, 0x5A, 0x27, 0x0F, 0x00});"]
+  - platform: template
+    name: "Pumpe PROBE 3 INFO 90/8"
+    on_press: [lambda: "id(pumpe_go).test_raw_class10({0xC3, 0x5A, 0x00, 0x08});"]
+  - platform: template
+    name: "Pumpe PROBE 4 SET 90/8 Kopf ohne Status"
+    on_press: [lambda: "id(pumpe_go).test_raw_class10({0x8A, 0x5A, 0x00, 0x08, 0x01, 0x4D, 0x01, 0x00, 0x00, 0x01, 0x00});"]
+  - platform: template
+    name: "Pumpe PROBE 5 OS 01 auf 90/8"
+    on_press: [lambda: "id(pumpe_go).test_raw_class10({0x44, 0x5A, 0x00, 0x08, 0x00});"]
 ```
 
 ## Offen

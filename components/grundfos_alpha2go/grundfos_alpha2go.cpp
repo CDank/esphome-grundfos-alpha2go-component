@@ -93,6 +93,12 @@ void GrundfosAlpha2Go::test_set_night_setback(bool enabled, bool with_header) {
   this->queue_write_(f, n, with_header ? "SET 90/8 variant A" : "SET 90/8 variant B");
 }
 
+void GrundfosAlpha2Go::test_raw_class10(const std::vector<uint8_t> &apdu) {
+  uint8_t f[geni::MAX_TX_FRAME + 4];
+  const size_t n = geni::build_class10_raw(f, apdu.data(), apdu.size());
+  this->queue_write_(f, n, "raw class 10");
+}
+
 void GrundfosAlpha2Go::queue_write_(const uint8_t *frame, size_t len, const char *label) {
   if (this->stage_ != Stage::POLLING) {
     ESP_LOGW(TAG, "Test write '%s' ignored - pump not connected", label);
