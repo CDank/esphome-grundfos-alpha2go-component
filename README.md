@@ -218,8 +218,8 @@ Die Komponente schreibt nur, wenn eine der Testmethoden ausdrücklich aufgerufen
 |---|---|---|
 | `test_command(5)` / `(6)` / `(7)` / `(8)` | Class 3 STOP / START·AUTO / REMOTE / LOCAL: `27 05 E7 F8 03 81 <Befehl> CRC` | ✅ STOP und START an HK1 bestätigt (Antwort `03 00` = OK). LOCAL wird quittiert, ohne sichtbare Wirkung. REMOTE ist nicht getestet. |
 | `test_set_night_setback(true/false)` | Class-10-SET 90/8: `27 0E E7 F8 0A 8A 5A 00 08 01 4D 01 00 00 01 <0/1> CRC` | ✅ an HK1 bestätigt: Antwort `0A 01 00`, 90/8 liest danach 1 bzw. 0 zurück |
-| `test_set_operation(src, mode, ctrl, sp)` | Class-10-SET 86/6 (Typ 303): 24 Byte, auf zwei BLE-Writes (20 + 4) verteilt | ✅ an HK1 bestätigt: Sollwert 2,5 m → 2,4 m → 2,5 m, Antwort `0A 01 00`, 86/6 und 86/7 übernehmen den Wert sofort |
-| `test_system_venting(true/false)` | Class-10-SET 88/612 (Typ 971): cmd 1 = StartManual / 0 = Stop, 22 Byte | ungetestet |
+| `test_set_operation(src, mode, ctrl, sp)` | Class-10-SET 86/6 (Typ 303): 24 Byte, auf zwei BLE-Writes (20 + 4) verteilt | ✅ an HK1 bestätigt: Sollwert 2,5 m → 2,4 m → 2,5 m und Regelart Prop. Druck → Konstantdruck (0, Sollwert in Pa) → Prop. Druck AutoAdapt (13) → Prop. Druck. Antwort jeweils `0A 01 00`, 86/6 und 86/7 übernehmen die Werte sofort. Bei AutoAdapt ignoriert die Pumpe den mitgeschickten Sollwert und setzt ihren eigenen (HK1: 41138 Pa). |
+| `test_system_venting(true/false)` | Class-10-SET 88/612 (Typ 971): cmd 1 = StartManual / 0 = Stop, 22 Byte | ✅ an HK1 bestätigt: nach einigen Sekunden meldet 88/612 `cmd=1 state=1 algorithm=1`, 86/8 zeigt Quelle 128 (SystemAirVenting) mit Konstantdrehzahl (3725–5025 1/min). Stop setzt 88/612 sofort auf 0. |
 | `test_raw_class10({...})` | beliebige Class-10-APDU (Kopfbyte + Daten), für Formatproben | Werkzeug |
 
 STOP/START ändern die **lokale** Anforderung (86/6: Betriebsart Stopp/Auto, `control_source` bleibt Panel). Das wirkt wie eine Änderung in der GO-App. Regelart und Sollwert bleiben erhalten, und die App kann den Zustand danach normal wieder ändern.

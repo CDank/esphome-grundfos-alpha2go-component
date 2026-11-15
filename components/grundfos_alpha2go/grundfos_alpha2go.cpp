@@ -187,7 +187,7 @@ struct ControlModeDef {
 // Klartexte an die Begriffe der GO-App angelehnt ("Prop. Druck", "Foerderstrom"). In der App wird AutoAdapt
 // innerhalb von Prop. Druck bzw. Konstantdruck aktiviert; die Pumpe meldet das als 13 bzw. 14 (an HK1 geprueft).
 static const ControlModeDef CONTROL_MODES[] = {
-    {0, "ConstantPressure", "Konstantdruck", SP_PRESSURE},
+    {0, "ConstantPressure", "Konstantdruck", SP_PRESSURE},  // Pa an HK1 verifiziert (Schreibtest)
     {1, "ProportionalPressure", "Prop. Druck", SP_PRESSURE},  // Pa an HK1 verifiziert
     {2, "ConstantSpeed", "Konstantdrehzahl", SP_SPEED},       // 1/min an HK1 verifiziert
     {5, "AutoAdapt", "AutoAdapt", SP_PRESSURE},
