@@ -98,20 +98,22 @@ struct ControlModeDef {
   const char *text;
   SetpointKind kind;
 };
+// Klartexte an die Begriffe der GO-App angelehnt ("Prop. Druck", "Foerderstrom"). In der App wird AutoAdapt
+// innerhalb von Prop. Druck bzw. Konstantdruck aktiviert; die Pumpe meldet das als 13 bzw. 14 (an HK1 geprueft).
 static const ControlModeDef CONTROL_MODES[] = {
     {0, "ConstantPressure", "Konstantdruck", SP_PRESSURE},
-    {1, "ProportionalPressure", "Proportionaldruck", SP_PRESSURE},  // Pa an HK1 verifiziert
-    {2, "ConstantSpeed", "Konstantdrehzahl", SP_SPEED},  // 1/min an HK1 verifiziert
+    {1, "ProportionalPressure", "Prop. Druck", SP_PRESSURE},  // Pa an HK1 verifiziert
+    {2, "ConstantSpeed", "Konstantdrehzahl", SP_SPEED},       // 1/min an HK1 verifiziert
     {5, "AutoAdapt", "AutoAdapt", SP_PRESSURE},
     {6, "ConstantTemperature", "Konstanttemperatur", SP_UNKNOWN},
     {7, "ClosedLoopSensor", "Sensorregelung", SP_UNKNOWN},
-    {8, "ConstantFlow", "Konstanter Durchfluss", SP_FLOW},  // m3/s an HK1 verifiziert
+    {8, "ConstantFlow", "Konstanter Förderstrom", SP_FLOW},  // m3/s an HK1 verifiziert
     {9, "ConstantLevel", "Konstantes Niveau", SP_UNKNOWN},
     {10, "FlowAdapt", "FlowAdapt", SP_FLOW},
     {11, "ConstantDifferentialPressure", "Konstanter Differenzdruck", SP_PRESSURE},
     {12, "ConstantDifferentialTemperature", "Konstante Differenztemperatur", SP_UNKNOWN},
-    {13, "AutoAdaptRadiator", "AutoAdapt Heizkörper", SP_PRESSURE},  // Pa an HK1 verifiziert
-    {14, "AutoAdaptUnderfloor", "AutoAdapt Fußbodenheizung", SP_PRESSURE},
+    {13, "AutoAdaptRadiator", "Prop. Druck (AutoAdapt)", SP_PRESSURE},    // Pa an HK1 verifiziert
+    {14, "AutoAdaptUnderfloor", "Konstantdruck (AutoAdapt)", SP_PRESSURE},  // Pa an HK1 verifiziert
     {15, "AutoAdaptRadiatorAndUnderfloor", "AutoAdapt Heizkörper + Fußboden", SP_PRESSURE},
     {24, "UserDefined", "Benutzerdefiniert", SP_UNKNOWN},
     {26, "ProportionalDifferentialPressure", "Proportionaler Differenzdruck", SP_PRESSURE},

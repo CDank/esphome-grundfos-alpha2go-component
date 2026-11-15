@@ -65,12 +65,15 @@ Messwerte von der Testpumpe (Heizkreis, Dauerbetrieb):
 **Sollwert:** Die Pumpe liefert ihn in SI-Einheiten, abhängig von der Regelart. Weil ein Sensor in Home Assistant eine feste Einheit braucht, gibt es getrennte Sensoren:
 `setpoint_head` gilt bei Druck-Regelarten (Konstant-/Proportionaldruck, Konstant-/Proportional-Differenzdruck, AutoAdapt), `setpoint_flow` bei Konstantem Durchfluss und FlowAdapt, `setpoint_speed` bei Konstantdrehzahl. Die jeweils anderen stehen dann auf „unbekannt“ (NaN).
 `setpoint_actual` ist der momentane Zielwert, den die Pumpe gerade ausregelt: bei Proportionaldruck der Punkt auf der Kurve beim aktuellen Durchfluss, er liegt nah an der tatsächlichen Förderhöhe.
-Verifiziert sind Proportionaldruck (Pa), AutoAdapt Heizkörper (Pa), Konstanter Durchfluss (m³/s) und Konstantdrehzahl (1/min); bei den übrigen Druck-Regelarten ist Pa angenommen.
-Bei AutoAdapt meldet 86/8 denselben Wert wie 86/7 (an HK1: 41 138 Pa = 4,19 m bei 3,2 m tatsächlicher Förderhöhe); `setpoint_actual` zeigt dort also den Kurvensollwert, nicht den momentanen Punkt.
+Verifiziert sind Prop. Druck (Pa), beide AutoAdapt-Varianten (Pa), Konstanter Förderstrom (m³/s) und Konstantdrehzahl (1/min); bei Konstantdruck ohne AutoAdapt ist Pa angenommen.
+In der GO-App wird AutoAdapt innerhalb von „Prop. Druck“ oder „Konstantdruck“ eingeschaltet. Die Pumpe meldet das als eigene Regelart: 13 = Prop. Druck mit AutoAdapt (an HK1: 41 138 Pa = 4,19 m, tatsächlich 3,2 m), 14 = Konstantdruck mit AutoAdapt (29 412 Pa = 3,00 m, tatsächlich 2,99 m). Die Profilnamen „Radiator“/„Underfloor“ beziehen sich auf diese beiden Kennlinientypen.
+Bei AutoAdapt meldet 86/8 denselben Wert wie 86/7; `setpoint_actual` zeigt dort also den Sollwert, nicht den momentanen Punkt auf der Kurve.
+
+**Stopp** (Betriebsart 1): 86/6 und 86/7 behalten Regelart und Sollwert der letzten Einstellung, 86/8 meldet Konstantdrehzahl mit 0. Durchfluss, Förderhöhe, Leistung und Drehzahl gehen auf 0; im Betriebsverlauf (93/1) zählt die Betriebszeit nicht weiter, die Einschaltdauer schon.
 
 Codes für `operation_mode`: 0 = Auto, 1 = Stopp, 2 = Min, 3 = Max, 4 = Benutzerdefiniert, 7 = Hand, 8 = Standby.
-Codes für `control_mode`: 0 = Konstantdruck, 1 = Proportionaldruck, 2 = Konstantdrehzahl, 5 = AutoAdapt, 8 = Konstanter Durchfluss, 10 = FlowAdapt, 13 = AutoAdapt Heizkörper, 14 = AutoAdapt Fußboden, 15 = AutoAdapt Heizkörper + Fußboden, 254 = keine.
-Die `_text`-Sensoren liefern dasselbe als deutschen Klartext. Im Log stehen zum Vergleich auch 86/6 (lokale Anforderung) und 86/8.
+Codes für `control_mode`: 0 = Konstantdruck, 1 = Prop. Druck, 2 = Konstantdrehzahl, 8 = Konstanter Förderstrom, 13 = Prop. Druck (AutoAdapt), 14 = Konstantdruck (AutoAdapt); weitere Codes aus dem Profil (5, 10, 15 …) bietet die GO-App für die ALPHA2 GO nicht an.
+Die `_text`-Sensoren liefern dasselbe als deutschen Klartext, angelehnt an die Begriffe der GO-App. Im Log stehen zum Vergleich auch 86/6 (lokale Anforderung) und 86/8.
 
 Es wird nur angefragt, was konfiguriert ist. Die Antworten werden über den Objekttyp erkannt, nicht über die Version. Dadurch spielt es keine Rolle, ob die Pumpe Typ 256 als v1, v2 oder v3 meldet.
 Bei einem Verbindungsabbruch gehen alle Sensoren auf `NaN`.
