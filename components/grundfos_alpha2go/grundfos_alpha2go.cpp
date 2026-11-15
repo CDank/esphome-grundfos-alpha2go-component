@@ -2,6 +2,7 @@
 #include "esphome/core/log.h"
 #include "esphome/core/helpers.h"
 #include "esphome/core/hal.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 
@@ -91,6 +92,22 @@ void GrundfosAlpha2Go::test_set_night_setback(bool enabled) {
   uint8_t f[geni::MAX_TX_FRAME + 4];
   const size_t n = geni::build_object_set(f, 90, 8, geni::TYPE_AUTONIGHT_ENABLE, 1, &v, 1);
   this->queue_write_(f, n, enabled ? "SET 90/8 = 1" : "SET 90/8 = 0");
+}
+
+void GrundfosAlpha2Go::test_set_operation(uint8_t source, uint8_t mode, uint8_t control, float setpoint) {
+  // 86/6 OperationStatusRequest (Typ 303 v1): u8 source, u8 mode, u8 control, float setpoint (SI, Big Endian)
+  uint8_t d[7] = {source, mode, control};
+  uint32_t u;
+  memcpy(&u, &setpoint, 4);
+  d[3] = (uint8_t) (u >> 24);
+  d[4] = (uint8_t) (u >> 16);
+  d[5] = (uint8_t) (u >> 8);
+  d[6] = (uint8_t) u;
+  uint8_t f[geni::MAX_TX_FRAME + 4];
+  const size_t n = geni::build_object_set(f, 86, 6, geni::TYPE_OPERATION_STATUS, 1, d, sizeof(d));
+  char label[64];
+  snprintf(label, sizeof(label), "SET 86/6 src=%u mode=%u ctrl=%u sp=%.1f", source, mode, control, setpoint);
+  this->queue_write_(f, n, label);
 }
 
 void GrundfosAlpha2Go::test_raw_class10(const std::vector<uint8_t> &apdu) {
@@ -407,12 +424,15 @@ void GrundfosAlpha2Go::write_cccd_() {
 }
 
 void GrundfosAlpha2Go::send_frame_(const uint8_t *frame, size_t len) {
-  uint8_t tmp[geni::MAX_TX_FRAME];
-  if (len > sizeof(tmp)) return;
-  memcpy(tmp, frame, len);
-  auto st = esp_ble_gattc_write_char(this->parent_->get_gattc_if(), this->parent_->get_conn_id(), this->data_handle_,
-                                     len, tmp, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
-  if (st != ESP_OK) ESP_LOGW(TAG, "write failed (%d)", (int) st);
+  // Lange Frames in Stuecken zu BLE_CHUNK Byte senden (wie die Pumpe ihre Antworten zerlegt)
+  uint8_t tmp[geni::BLE_CHUNK];
+  for (size_t off = 0; off < len; off += geni::BLE_CHUNK) {
+    const size_t n = std::min(geni::BLE_CHUNK, len - off);
+    memcpy(tmp, frame + off, n);
+    auto st = esp_ble_gattc_write_char(this->parent_->get_gattc_if(), this->parent_->get_conn_id(), this->data_handle_,
+                                       n, tmp, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
+    if (st != ESP_OK) ESP_LOGW(TAG, "write failed (%d)", (int) st);
+  }
   this->t_last_tx_ = millis();
 }
 

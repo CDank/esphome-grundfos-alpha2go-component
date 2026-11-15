@@ -183,7 +183,14 @@ int main() {
     assert(n == 18 && f[15] == 0x01 && crc16(f + 1, f[1] + 1) == (uint16_t) ((f[n - 2] << 8) | f[n - 1]));
     uint8_t big[16] = {0};
     assert(build_object_set(f, 1, 1, 1, 1, big, 3) == 20);
-    assert(build_object_set(f, 86, 6, 303, 1, big, 7) == 0);  // 24 Byte -> zu lang fuer einen BLE-Write
+    // 86/6 = aktuelle Werte (src 0, Auto, PP, 24509.8 Pa): 24 Byte -> zwei BLE-Writes
+    const uint8_t op[] = {0x00, 0x00, 0x01, 0x46, 0xBF, 0x7B, 0x9C};
+    n = build_object_set(f, 86, 6, TYPE_OPERATION_STATUS, 1, op, 7);
+    const uint8_t opref[] = {0x27, 0x14, 0xE7, 0xF8, 0x0A, 0x90, 0x56, 0x00, 0x06, 0x01, 0x2F, 0x01,
+                             0x00, 0x00, 0x07, 0x00, 0x00, 0x01, 0x46, 0xBF, 0x7B, 0x9C};
+    assert(n == 24 && memcmp(f, opref, sizeof(opref)) == 0);
+    assert(crc16(f + 1, f[1] + 1) == (uint16_t) ((f[n - 2] << 8) | f[n - 1]));
+    assert(build_object_set(f, 1, 1, 1, 1, big, 16) == 0);  // 33 Byte -> zu lang
   }
 
   // Class-3-Befehl STOP: 27 05 E7 F8 03 81 05 CRC (9 Byte)
@@ -207,9 +214,9 @@ int main() {
     uint8_t h[16];
     build_object_get(h, 90, 8);
     assert(build_class10_raw(f, get, 4) == 11 && memcmp(f, h, 11) == 0);
-    uint8_t big[14] = {0};
-    assert(build_class10_raw(f, big, 0) == 0 && build_class10_raw(f, big, 14) == 0);
-    assert(build_class10_raw(f, big, 13) == 20);
+    uint8_t big[26] = {0};
+    assert(build_class10_raw(f, big, 0) == 0 && build_class10_raw(f, big, 25) == 32);
+    assert(build_class10_raw(f, big, 26) == 0);
   }
 
   printf("alle Tests OK\n");

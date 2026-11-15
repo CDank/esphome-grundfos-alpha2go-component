@@ -70,8 +70,9 @@ inline size_t build_object_get(uint8_t *out, uint8_t obj_id, uint16_t sub_id) {
 //   27 LE E7 F8 0A <0x80|n> <ID> <SubHi> <SubLo> <TypHi> <TypLo> <Ver> 00 00 <DatenLen> <Daten> CRC
 // Objektkopf wie in den GET-Antworten, aber ohne das fuehrende Statusbyte. OS-Bits 10 = SET.
 // Status in der Antwort (erstes Datenbyte): 00 OK, 01 Operation unbekannt (OS 01), 04 Objekt/Typ nicht gefunden.
-// Max. 20 Byte pro BLE-Write -> hoechstens 3 Datenbytes. Rueckgabe: Framelaenge, 0 wenn zu lang.
-static constexpr size_t MAX_TX_FRAME = 20;
+// Frames > BLE_CHUNK werden auf mehrere BLE-Writes verteilt (send_frame_). Rueckgabe: Framelaenge, 0 wenn zu lang.
+static constexpr size_t BLE_CHUNK = 20;     // Nutzlast eines BLE-Writes bei MTU 23
+static constexpr size_t MAX_TX_FRAME = 32;  // laengster Frame, den wir senden (SET 86/6 = 24 Byte)
 inline size_t build_object_set(uint8_t *out, uint8_t obj_id, uint16_t sub_id, uint16_t type, uint8_t version,
                                const uint8_t *data, uint8_t len) {
   const size_t apdu = 3 + 6 + len;
