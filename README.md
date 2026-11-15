@@ -190,6 +190,6 @@ cl /std:c++17 /EHsc /I components\grundfos_alpha2go tests\test_geni.cpp /Fe:t.ex
 ## Offen
 
 - **Schreiben** (Sollwert, Regelart) ist nicht implementiert. Laut Profil sind 86/6 und 86/10 (Typ 303) beschreibbar, aber das Format der SET-Anfrage steht nicht in der App-APK (nur im fehlenden Dart-Code). Dafür wird ein Bluetooth-Mitschnitt der GO-App beim Ändern des Sollwerts gebraucht.
-- Ungeprüft: andere Firmware-Stände, andere ALPHA2-GO-Varianten. (Der Bond übersteht Neustart und OTA-Update des ESP; an HK1 mehrfach ohne erneutes Drücken der Bluetooth-Taste verbunden.)
+- Ungeprüft: Bond nach ESP-Neustart, andere Firmware-Stände, andere ALPHA2-GO-Varianten.
 
 Lizenz: MIT. Unabhängiges Projekt, nicht von Grundfos.
