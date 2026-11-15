@@ -31,7 +31,10 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
   SUB_SENSOR(starts)
   SUB_SENSOR(operating_hours)
   SUB_SENSOR(power_on_hours)
-  SUB_SENSOR(energy)  // Diagnose: fragt 87/1 ab und loggt die Rohantwort, Feldlayout noch unbekannt
+  SUB_SENSOR(energy)          // 87/1 system_energy (J) -> kWh
+  SUB_SENSOR(operation_mode)  // 86/7 operation_mode (0=Auto, 1=Stop, 2=Min, 3=Max, ...)
+  SUB_SENSOR(control_mode)    // 86/7 control_mode (1=PP, 2=CS, 5=AutoAdapt, 13..15=AutoAdapt-Varianten, ...)
+  SUB_SENSOR(setpoint)        // 86/7 set_point, Rohwert
 
  public:
   void setup() override;
@@ -50,7 +53,18 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
     HELLO,       // Erstabfrage der GO-App senden
     POLLING,     // normaler Betrieb
   };
-  enum Request : uint8_t { REQ_ELECTRIC = 1, REQ_FLOW = 2, REQ_COUNTERS = 4, REQ_TEMPERATURE = 8, REQ_ENERGY = 16 };
+  enum Request : uint8_t {
+    REQ_ELECTRIC = 1,      // 87/69
+    REQ_FLOW = 2,          // 93/290
+    REQ_COUNTERS = 4,      // 93/1
+    REQ_TEMPERATURE = 8,   // 93/300
+    REQ_ENERGY = 16,       // 87/1
+    REQ_OP_LOCAL = 32,     // 86/6 lokale Anforderung (App/Taste)
+    REQ_OP_PRIO = 64,      // 86/7 priorisierte Anforderung -> Sensoren
+    REQ_OP_REALIZED = 128  // 86/8 umgesetzte Anforderung
+  };
+  static constexpr uint8_t REQ_DIAG_MASK = REQ_ENERGY | REQ_OP_LOCAL | REQ_OP_PRIO | REQ_OP_REALIZED;
+  static const char *req_name_(uint8_t req);
 
   void reset_state_();
   void write_cccd_();
@@ -70,7 +84,7 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
   uint32_t t_stage_{0};
   uint32_t t_last_tx_{0};
   bool inflight_{false};
-  bool log_raw_rx_{false};  // waehrend die 87/1-Abfrage laeuft: rohe Notifications loggen
+  uint8_t last_req_{0};  // zuletzt gesendete Abfrage (es ist immer nur eine unterwegs)
   uint8_t wanted_mask_{0};
   uint8_t pending_mask_{0};
   geni::Reassembler rx_;

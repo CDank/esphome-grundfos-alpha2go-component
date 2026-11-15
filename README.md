@@ -29,7 +29,7 @@ sensor:
     media_temperature: {name: "Pumpe Medientemperatur"}
 ```
 
-Ein vollständiges Beispiel mit allen Sensoren und einem kWh-Zähler aus der Leistung steht in [`example/grundfos-alpha2go.yaml`](example/grundfos-alpha2go.yaml).
+Ein vollständiges Beispiel mit allen Sensoren steht in [`example/grundfos-alpha2go.yaml`](example/grundfos-alpha2go.yaml).
 
 ## Sensoren
 
@@ -51,6 +51,16 @@ Messwerte von der Testpumpe (Heizkreis, Dauerbetrieb):
 | `media_temperature` | °C | 93/300 @0 | 38,0 |
 | `pcb_temperature` | °C | 93/300 @4 | 59,6 |
 | `controlbox_temperature` | °C | 93/300 @8 | 50,5 |
+| `energy` | kWh | 87/1 @0 (J ÷ 3,6·10⁶) | 77,47 |
+| `operation_mode` | Code | 86/7 @1 | ungetestet |
+| `control_mode` | Code | 86/7 @2 | ungetestet |
+| `setpoint` | Rohwert | 86/7 @3 | ungetestet |
+
+`energy` ist der Zähler der Pumpe selbst (wie „Kumulierte Leistungsaufnahme“ in der App), kein aus der Leistung integrierter Wert.
+
+Codes für `operation_mode`: 0 = Auto, 1 = Stop, 2 = Min, 3 = Max, 4 = UserDefined, 7 = Hand, 8 = Standby.
+Codes für `control_mode`: 0 = Konstantdruck, 1 = Proportionaldruck, 2 = Konstantdrehzahl, 5 = AutoAdapt, 13 = AutoAdapt Heizkörper, 14 = AutoAdapt Fußboden, 15 = AutoAdapt Heizkörper + Fußboden, 254 = keine.
+Die Einheit von `setpoint` hängt von der Regelart ab und ist noch nicht geprüft. Im Log stehen zum Vergleich auch 86/6 (lokale Anforderung) und 86/8 (umgesetzte Anforderung).
 
 Es wird nur angefragt, was konfiguriert ist. Die Antworten werden über den Objekttyp erkannt, nicht über die Version. Dadurch spielt es keine Rolle, ob die Pumpe Typ 256 als v1, v2 oder v3 meldet.
 Bei einem Verbindungsabbruch gehen alle Sensoren auf `NaN`.
@@ -68,6 +78,7 @@ Mehrere Pumpen: je Pumpe ein eigener `ble_client` und ein eigener `grundfos_alph
 ## Protokoll: Feldbelegung (an der Hardware geprüft)
 
 Alle Werte Big Endian, Floats IEEE-754. `NaN` bedeutet: Die Pumpe liefert dieses Feld nicht.
+Die Feldnamen stammen aus einem GENI-Geräteprofil, das in der Grundfos-GO-App als Testdatei enthalten ist (`test_geni_profile_30_4_1.xml`); die Objekte 87/1, 87/69, 93/1, 93/290 und 93/300 stimmen darin in ID und Typ mit der ALPHA2 GO überein.
 
 **93/290, Typ 565 v2, 36 Byte**
 
@@ -113,11 +124,31 @@ Nur @0, @8 und @24 sind als Sensoren verfügbar, die übrigen Felder erscheinen 
 | @0 | Medientemperatur | ✅ |
 | @4 | Platinentemperatur | ✅ |
 | @8 | Controlbox-Temperatur | ✅ |
-| @12 (1 Byte) | vermutlich steady_state-Flag (erst `00`, dann `01`) | unbelegt |
+| @12 (1 Byte) | `steady_state` (bool) | ✅ |
+
+**87/1, Typ 232 v1 `OverallEnergyConsumption`, 26 Byte (bei einer Pumpe)**
+
+| Offset | Inhalt | ALPHA2 GO |
+|---|---|---|
+| @0 | Energie gesamt, double in J | ✅ 278 880 350 J = 77,47 kWh (+220 J pro 10 s bei 22 W) |
+| @8 | Leistung gesamt, float in W | ✅ 22,04 |
+| @12 | Anzahl Pumpen, u16 | ✅ 1 |
+| @14 | je Pumpe: Leistung (float, W), Energie (double, J) | ✅ wie @8 / @0 |
+
+**86/6, 86/7, 86/8, Typ 303 `OperationStatusRequest`, 7 Byte** (laut Profil, auf der ALPHA2 GO noch nicht geprüft)
+
+| Offset | Inhalt |
+|---|---|
+| @0 | `control_source` (1 = Panel, 2 = Bus, 104 = AutoNight, …) |
+| @1 | `operation_mode` |
+| @2 | `control_mode` |
+| @3 | `set_point`, float |
+
+86/6 ist die lokale Anforderung (App/Taste), 86/7 die priorisierte Anforderung nach Bewertung von lokal/remote/Alarm, 86/8 die tatsächlich umgesetzte Anforderung.
 
 ## Fehlersuche
 
-Mit `logger` auf `VERBOSE` für `grundfos_alpha2go` loggt die Komponente jede Antwort mit Typ, Version und Länge, dazu alle Rohfelder (Floats von 565 und 256, Hex-Dump von 248 und 534):
+Mit `logger` auf `VERBOSE` für `grundfos_alpha2go` loggt die Komponente jede Antwort mit Typ, Version und Länge, dazu alle Rohfelder (Floats von 565 und 256, Hex-Dump von 248 und 534, dekodierte Werte von 232). Für 87/1 und 86/6–8 erscheinen zusätzlich die rohen Notifications (`raw RX`), also auch Antworten, die der Parser verwirft. 86/6–8 werden schon auf `DEBUG` dekodiert geloggt, Timeouts mit Objektnummer (`Reply timeout (86/7)`).
 
 ```yaml
 logger:
@@ -147,8 +178,8 @@ cl /std:c++17 /EHsc /I components\grundfos_alpha2go tests\test_geni.cpp /Fe:t.ex
 
 ## Offen
 
-- **Energiezähler der Pumpe** (kWh, wie in der App): Objekt 87/1, Feldlayout unbekannt. Die Option `energy:` ist bisher **nur Diagnose**: Sie fragt 87/1 ab und loggt Anfrage und Rohantwort auf `DEBUG` (`87/1 request`, `87/1 raw RX`, `Unknown reply type …`), liefert aber noch keinen Wert. Bis das Layout geklärt ist, ersetzt ein `integration`-Sensor aus `power` den Zähler (siehe Beispiel-YAML).
-- **Schreiben** (Sollwert, Regelart) ist nicht implementiert; das SET-Format ist nicht belegt.
+- **Regelart/Sollwert lesen** (86/6–8): Layout aus dem Profil, auf der ALPHA2 GO noch nicht geprüft; Einheit des Sollwerts offen.
+- **Schreiben** (Sollwert, Regelart) ist nicht implementiert. Laut Profil sind 86/6 und 86/10 (Typ 303) beschreibbar, aber das Format der SET-Anfrage steht nicht in der App-APK (nur im fehlenden Dart-Code). Dafür wird ein Bluetooth-Mitschnitt der GO-App beim Ändern des Sollwerts gebraucht.
 - Ungeprüft: Bond nach ESP-Neustart, andere Firmware-Stände, andere ALPHA2-GO-Varianten.
 
 Lizenz: MIT. Unabhängiges Projekt, nicht von Grundfos.

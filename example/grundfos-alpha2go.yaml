@@ -68,17 +68,12 @@ sensor:
       name: "Pumpe Platinentemperatur"
     controlbox_temperature:
       name: "Pumpe Controlbox-Temperatur"
-    # Diagnose: fragt den Energiezaehler (87/1) ab und loggt die Rohantwort, liefert noch keinen Wert
-    # energy:
-    #   name: "Pumpe Energie (Pumpe)"
-
-  - platform: integration     # kWh aus der Leistung (Zaehler der Pumpe, Objekt 87/1, noch nicht implementiert)
-    name: "Pumpe Energie"
-    sensor: pumpe_leistung
-    time_unit: h
-    restore: true
-    unit_of_measurement: kWh
-    device_class: energy
-    state_class: total_increasing
-    filters:
-      - multiply: 0.001
+    energy:                     # Zaehler der Pumpe (wie "Kumulierte Leistungsaufnahme" in der App)
+      name: "Pumpe Energie"
+    # Regelart/Sollwert aus 86/7 (Codes siehe README), auf der ALPHA2 GO noch ungetestet:
+    operation_mode:
+      name: "Pumpe Betriebsart"
+    control_mode:
+      name: "Pumpe Regelart"
+    setpoint:
+      name: "Pumpe Sollwert"

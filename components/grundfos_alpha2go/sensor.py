@@ -15,6 +15,7 @@ from esphome.const import (
     DEVICE_CLASS_POWER,
     DEVICE_CLASS_TEMPERATURE,
     DEVICE_CLASS_VOLTAGE,
+    ENTITY_CATEGORY_DIAGNOSTIC,
     STATE_CLASS_MEASUREMENT,
     STATE_CLASS_TOTAL_INCREASING,
     UNIT_AMPERE,
@@ -38,6 +39,9 @@ CONF_CONTROLBOX_TEMPERATURE = "controlbox_temperature"
 CONF_STARTS = "starts"
 CONF_OPERATING_HOURS = "operating_hours"
 CONF_POWER_ON_HOURS = "power_on_hours"
+CONF_OPERATION_MODE_SENSOR = "operation_mode"
+CONF_CONTROL_MODE_SENSOR = "control_mode"
+CONF_SETPOINT_SENSOR = "setpoint"
 
 ns = cg.esphome_ns.namespace("grundfos_alpha2go")
 GrundfosAlpha2Go = ns.class_(
@@ -118,13 +122,28 @@ CONFIG_SCHEMA = (
                 state_class=STATE_CLASS_TOTAL_INCREASING,
                 icon="mdi:timer-outline",
             ),
-            # Diagnose: fragt Objekt 87/1 ab und loggt die Rohantwort.
-            # Liefert noch keinen Wert, bis das Feldlayout bekannt ist.
+            # Energiezaehler der Pumpe (Objekt 87/1, intern in J)
             cv.Optional(CONF_ENERGY): sensor.sensor_schema(
                 unit_of_measurement=UNIT_KILOWATT_HOURS,
-                accuracy_decimals=2,
+                accuracy_decimals=3,
                 device_class=DEVICE_CLASS_ENERGY,
                 state_class=STATE_CLASS_TOTAL_INCREASING,
+            ),
+            # Aus Objekt 86/7 (priorisierte Anforderung); Codes siehe README
+            cv.Optional(CONF_OPERATION_MODE_SENSOR): sensor.sensor_schema(
+                accuracy_decimals=0,
+                icon="mdi:state-machine",
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_CONTROL_MODE_SENSOR): sensor.sensor_schema(
+                accuracy_decimals=0,
+                icon="mdi:tune-variant",
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_SETPOINT_SENSOR): sensor.sensor_schema(
+                accuracy_decimals=3,
+                icon="mdi:target",
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
         }
     )
@@ -154,3 +173,6 @@ async def to_code(config):
     await sensors(CONF_OPERATING_HOURS, var.set_operating_hours_sensor)
     await sensors(CONF_POWER_ON_HOURS, var.set_power_on_hours_sensor)
     await sensors(CONF_ENERGY, var.set_energy_sensor)
+    await sensors(CONF_OPERATION_MODE_SENSOR, var.set_operation_mode_sensor)
+    await sensors(CONF_CONTROL_MODE_SENSOR, var.set_control_mode_sensor)
+    await sensors(CONF_SETPOINT_SENSOR, var.set_setpoint_sensor)

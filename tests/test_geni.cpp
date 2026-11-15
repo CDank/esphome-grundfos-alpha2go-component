@@ -83,5 +83,47 @@ int main() {
     assert(fabsf(u - 235.2f) < 1e-3 && fabsf(p - 37.88f) < 1e-3 && rpm == 4542.f && aux == 51.0f);
     assert(starts == 6 && fabsf(hours - 8752.97f) < 0.05f);
   }
+  // Echter 87/1-Frame (Typ 232) aus dem Hardware-Log, in drei Notifications wie empfangen
+  {
+    const uint8_t n1[] = {0x24, 0x25, 0xF8, 0xE7, 0x0A, 0x21, 0x00, 0x00, 0xE8, 0x01,
+                          0x00, 0x00, 0x1A, 0x41, 0xB0, 0x9F, 0x60, 0x5D, 0xFC, 0x40};
+    const uint8_t n2[] = {0xA0, 0x41, 0xB0, 0x4F, 0x00, 0x00, 0x01, 0x41, 0xB0, 0x4F,
+                          0x00, 0x41, 0xB0, 0x9F, 0x60, 0x5D, 0xFC, 0x40, 0xA0, 0x29};
+    const uint8_t n3[] = {0xB1};
+    Reassembler r;
+    int got = 0, errs = 0;
+    double joule = 0, pump_joule = 0;
+    float pw = 0, pump_pw = 0;
+    uint16_t pumps = 0;
+    auto cb = [&](const Reply &rp) {
+      got++;
+      assert(rp.type == TYPE_ENERGY && rp.version == 1 && rp.len == 26);
+      joule = be_double(rp.data);
+      pw = be_float(rp.data + 8);
+      pumps = be_u16(rp.data + 12);
+      pump_pw = be_float(rp.data + 14);
+      pump_joule = be_double(rp.data + 18);
+    };
+    errs += r.feed(n1, sizeof(n1), cb);
+    errs += r.feed(n2, sizeof(n2), cb);
+    errs += r.feed(n3, sizeof(n3), cb);
+    assert(errs == 0 && got == 1);
+    assert(fabs(joule - 278880350.0) < 1.0 && fabs(joule / 3.6e6 - 77.4668) < 1e-4);
+    assert(fabsf(pw - 22.04f) < 0.01f && pumps == 1 && pump_pw == pw && pump_joule == joule);
+  }
+
+  // Typ 303 (OperationStatusRequest): u8 source, u8 mode, u8 control, float setpoint
+  {
+    auto op = reply(303, 1, {1, 0, 13, 0x3F, 0x80, 0x00, 0x00});  // Panel, Auto, AutoAdaptRadiator, 1.0
+    Reassembler r;
+    int got = 0;
+    r.feed(op.data(), op.size(), [&](const Reply &rp) {
+      got++;
+      assert(rp.type == TYPE_OPERATION_STATUS && rp.len == 7);
+      assert(rp.data[0] == 1 && rp.data[1] == 0 && rp.data[2] == 13 && be_float(rp.data + 3) == 1.0f);
+    });
+    assert(got == 1);
+  }
+
   printf("alle Tests OK\n");
 }

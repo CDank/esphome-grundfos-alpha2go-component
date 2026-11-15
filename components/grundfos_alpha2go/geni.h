@@ -23,6 +23,9 @@ static constexpr uint16_t TYPE_MEDIA_TEMPERATURE = 534;   // Obj 93/300
 static constexpr uint16_t TYPE_PROCESS_VALUES_EXT = 565;  // Obj 93/290 (Flow/Head)
 static constexpr uint16_t TYPE_MOTOR_DETAILS = 256;       // Obj 87/69  (v1/v2/v3 -> gleiches Layout fuer Offset 0..32)
 static constexpr uint16_t TYPE_OPERATION_HISTORY = 248;   // Obj 93/1   (Zaehler)
+// Layouts aus dem GENI-Profil in der GO-App (test_geni_profile_30_4_1.xml), auf der ALPHA2 GO noch nicht geprueft:
+static constexpr uint16_t TYPE_ENERGY = 232;            // Obj 87/1 OverallEnergyConsumption: double@0, float@8, u16@12, [float,double]...
+static constexpr uint16_t TYPE_OPERATION_STATUS = 303;  // Obj 86/6,7,8 OperationStatusRequest: u8 src, u8 mode, u8 ctrl, float@3
 
 // CRC-16 (Poly 0x1021, Init 0xFFFF, Ergebnis invertiert), Big Endian im Frame.
 inline uint16_t crc16(const uint8_t *d, size_t n) {
@@ -73,11 +76,18 @@ inline size_t build_class2_get(uint8_t *out, const uint8_t *ids, uint8_t n, uint
 inline uint32_t be_u32(const uint8_t *p) {
   return ((uint32_t) p[0] << 24) | ((uint32_t) p[1] << 16) | ((uint32_t) p[2] << 8) | (uint32_t) p[3];
 }
+inline uint16_t be_u16(const uint8_t *p) { return (uint16_t) ((p[0] << 8) | p[1]); }
 inline float be_float(const uint8_t *p) {
   uint32_t u = be_u32(p);
   float f;
   memcpy(&f, &u, 4);
   return f;
+}
+inline double be_double(const uint8_t *p) {
+  uint64_t u = ((uint64_t) be_u32(p) << 32) | be_u32(p + 4);
+  double v;
+  memcpy(&v, &u, 8);
+  return v;
 }
 
 struct Reply {

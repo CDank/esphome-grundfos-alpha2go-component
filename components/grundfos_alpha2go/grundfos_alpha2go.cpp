@@ -36,8 +36,55 @@ void GrundfosAlpha2Go::dump_config() {
   LOG_SENSOR("  ", "Operating hours", this->operating_hours_sensor_);
   LOG_SENSOR("  ", "Power-on hours", this->power_on_hours_sensor_);
   LOG_SENSOR("  ", "Energy", this->energy_sensor_);
-  if (this->energy_sensor_ != nullptr)
-    ESP_LOGCONFIG(TAG, "  Energy: diagnostic only - requests object 87/1 and logs the raw reply, publishes nothing yet");
+  LOG_SENSOR("  ", "Operation mode", this->operation_mode_sensor_);
+  LOG_SENSOR("  ", "Control mode", this->control_mode_sensor_);
+  LOG_SENSOR("  ", "Setpoint (raw)", this->setpoint_sensor_);
+}
+
+// Abfragen in Sende-Reihenfolge
+struct RequestDef {
+  uint8_t bit;
+  uint8_t obj;
+  uint16_t sub;
+  const char *name;
+};
+static const RequestDef REQUESTS[] = {
+    {1, 87, 69, "87/69"},  {2, 93, 290, "93/290"}, {4, 93, 1, "93/1"},  {8, 93, 300, "93/300"},
+    {16, 87, 1, "87/1"},   {32, 86, 6, "86/6"},    {64, 86, 7, "86/7"}, {128, 86, 8, "86/8"},
+};
+
+const char *GrundfosAlpha2Go::req_name_(uint8_t req) {
+  for (const auto &r : REQUESTS)
+    if (r.bit == req) return r.name;
+  return "?";
+}
+
+static const char *operation_mode_name(uint8_t v) {
+  static const char *const names[] = {"Auto",    "Stop",          "Min",          "Max",         "UserDefined",
+                                      "ForcedStart", "NoCmd",     "Hand",         "Standby",     "StopWithoutDelay",
+                                      "EmergencyRun", "UserDefined2", "SetPumpsToLocalMode"};
+  return v < sizeof(names) / sizeof(names[0]) ? names[v] : "?";
+}
+
+static const char *control_mode_name(uint8_t v) {
+  switch (v) {
+    case 0: return "ConstantPressure";
+    case 1: return "ProportionalPressure";
+    case 2: return "ConstantSpeed";
+    case 5: return "AutoAdapt";
+    case 6: return "ConstantTemperature";
+    case 7: return "ClosedLoopSensor";
+    case 8: return "ConstantFlow";
+    case 10: return "FlowAdapt";
+    case 11: return "ConstantDifferentialPressure";
+    case 12: return "ConstantDifferentialTemperature";
+    case 13: return "AutoAdaptRadiator";
+    case 14: return "AutoAdaptUnderfloor";
+    case 15: return "AutoAdaptRadiatorAndUnderfloor";
+    case 26: return "ProportionalDifferentialPressure";
+    case 254: return "None";
+    default: return "?";
+  }
 }
 
 void GrundfosAlpha2Go::setup() {
@@ -52,6 +99,10 @@ void GrundfosAlpha2Go::setup() {
       this->controlbox_temperature_sensor_ != nullptr)
     this->wanted_mask_ |= REQ_TEMPERATURE;
   if (this->energy_sensor_ != nullptr) this->wanted_mask_ |= REQ_ENERGY;
+  // 86/6 und 86/8 nur zum Vergleich im Log; die Sensoren kommen aus 86/7
+  if (this->operation_mode_sensor_ != nullptr || this->control_mode_sensor_ != nullptr ||
+      this->setpoint_sensor_ != nullptr)
+    this->wanted_mask_ |= REQ_OP_LOCAL | REQ_OP_PRIO | REQ_OP_REALIZED;
 }
 
 void GrundfosAlpha2Go::reset_state_() {
@@ -61,7 +112,7 @@ void GrundfosAlpha2Go::reset_state_() {
   this->cccd_tries_ = 0;
   this->hello_sent_ = 0;
   this->inflight_ = false;
-  this->log_raw_rx_ = false;
+  this->last_req_ = 0;
   this->pending_mask_ = 0;
   this->rx_.reset();
 }
@@ -81,7 +132,10 @@ void GrundfosAlpha2Go::publish_all_nan_() {
                            this->aux_temperature_sensor_,
                            this->media_temperature_sensor_,
                            this->pcb_temperature_sensor_,
-                           this->controlbox_temperature_sensor_};
+                           this->controlbox_temperature_sensor_,
+                           this->operation_mode_sensor_,
+                           this->control_mode_sensor_,
+                           this->setpoint_sensor_};
   for (auto *s : all)
     if (s != nullptr) s->publish_state(NAN);
 }
@@ -153,8 +207,9 @@ void GrundfosAlpha2Go::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
     case ESP_GATTC_NOTIFY_EVT: {
       if (param->notify.handle != this->data_handle_) break;
       ESP_LOGVV(TAG, "RX %d bytes", (int) param->notify.value_len);
-      if (this->log_raw_rx_)  // auch Antworten, die der Parser verwirft (Fehlerantwort, anderes Format)
-        ESP_LOGD(TAG, "87/1 raw RX: %s", format_hex_pretty(param->notify.value, param->notify.value_len).c_str());
+      if (this->inflight_ && (this->last_req_ & REQ_DIAG_MASK))  // auch Antworten, die der Parser verwirft
+        ESP_LOGV(TAG, "%s raw RX: %s", req_name_(this->last_req_),
+                 format_hex_pretty(param->notify.value, param->notify.value_len).c_str());
       int crc_errors = this->rx_.feed(param->notify.value, param->notify.value_len,
                                       [this](const geni::Reply &r) { this->handle_reply_(r); });
       if (crc_errors > 0) ESP_LOGW(TAG, "%d GENI frame(s) dropped: CRC error", crc_errors);
@@ -192,30 +247,17 @@ void GrundfosAlpha2Go::send_frame_(const uint8_t *frame, size_t len) {
 }
 
 void GrundfosAlpha2Go::send_next_request_() {
-  uint8_t f[16];
-  size_t n = 0;
-  if (this->pending_mask_ & REQ_ELECTRIC) {
-    this->pending_mask_ &= ~REQ_ELECTRIC;
-    n = geni::build_object_get(f, 87, 69);
-  } else if (this->pending_mask_ & REQ_FLOW) {
-    this->pending_mask_ &= ~REQ_FLOW;
-    n = geni::build_object_get(f, 93, 290);
-  } else if (this->pending_mask_ & REQ_COUNTERS) {
-    this->pending_mask_ &= ~REQ_COUNTERS;
-    n = geni::build_object_get(f, 93, 1);
-  } else if (this->pending_mask_ & REQ_TEMPERATURE) {
-    this->pending_mask_ &= ~REQ_TEMPERATURE;
-    n = geni::build_object_get(f, 93, 300);
-  } else if (this->pending_mask_ & REQ_ENERGY) {
-    this->pending_mask_ &= ~REQ_ENERGY;
-    n = geni::build_object_get(f, 87, 1);  // power_and_energy (Layout unbekannt)
-    ESP_LOGD(TAG, "87/1 request: %s", format_hex_pretty(f, n).c_str());
-    this->log_raw_rx_ = true;
-  } else {
+  for (const auto &r : REQUESTS) {
+    if (!(this->pending_mask_ & r.bit)) continue;
+    this->pending_mask_ &= ~r.bit;
+    uint8_t f[16];
+    size_t n = geni::build_object_get(f, r.obj, r.sub);
+    ESP_LOGVV(TAG, "TX %s: %s", r.name, format_hex_pretty(f, n).c_str());
+    this->last_req_ = r.bit;
+    this->inflight_ = true;
+    this->send_frame_(f, n);
     return;
   }
-  this->inflight_ = true;
-  this->send_frame_(f, n);
 }
 
 void GrundfosAlpha2Go::loop() {
@@ -248,9 +290,8 @@ void GrundfosAlpha2Go::loop() {
     }
     case Stage::POLLING:
       if (this->inflight_ && now - this->t_last_tx_ > REPLY_TIMEOUT_MS) {
-        ESP_LOGD(TAG, "Reply timeout%s", this->log_raw_rx_ ? " (87/1)" : "");
+        ESP_LOGD(TAG, "Reply timeout (%s)", req_name_(this->last_req_));
         this->inflight_ = false;
-        this->log_raw_rx_ = false;
       }
       if (!this->inflight_ && this->pending_mask_ != 0 && now - this->t_last_tx_ >= MIN_TX_GAP_MS)
         this->send_next_request_();
@@ -265,8 +306,8 @@ void GrundfosAlpha2Go::update() {
 }
 
 void GrundfosAlpha2Go::handle_reply_(const geni::Reply &r) {
+  const uint8_t req = this->inflight_ ? this->last_req_ : 0;  // zu welcher Abfrage die Antwort gehoert
   this->inflight_ = false;
-  this->log_raw_rx_ = false;
   const uint8_t *d = r.data;
   ESP_LOGV(TAG, "Reply type=%u version=%u len=%u", r.type, r.version, r.len);
   switch (r.type) {
@@ -323,8 +364,34 @@ void GrundfosAlpha2Go::handle_reply_(const geni::Reply &r) {
         this->publish_(this->controlbox_temperature_sensor_, geni::be_float(d + 8));
       }
       break;
+    case geni::TYPE_ENERGY: {  // 87/1, v1: double@0 J, float@8 W, u16@12 n, n x {float W, double J}
+      if (r.len < 12) break;
+      const double joule = geni::be_double(d + 0);
+      ESP_LOGV(TAG, "232: system_energy=%.0f J (%.4f kWh) system_power=%.2f W", joule, joule / 3.6e6,
+               geni::be_float(d + 8));
+      if (r.len >= 14) {
+        const uint16_t pumps = geni::be_u16(d + 12);
+        for (uint16_t i = 0; i < pumps && 14u + 12u * (i + 1u) <= r.len; i++)
+          ESP_LOGV(TAG, "232: pump %u power=%.2f W energy=%.0f J", i, geni::be_float(d + 14 + 12 * i),
+                   geni::be_double(d + 18 + 12 * i));
+      }
+      if (std::isfinite(joule) && joule >= 0) this->publish_(this->energy_sensor_, (float) (joule / 3.6e6));
+      break;
+    }
+    case geni::TYPE_OPERATION_STATUS: {  // 86/6, 86/7, 86/8 (gleicher Typ -> Zuordnung ueber die Abfrage)
+      if (r.len < 7) break;
+      const uint8_t src = d[0], mode = d[1], ctrl = d[2];
+      const float sp = geni::be_float(d + 3);
+      ESP_LOGD(TAG, "%s: source=%u mode=%u (%s) control=%u (%s) setpoint=%g", req_name_(req), src, mode,
+               operation_mode_name(mode), ctrl, control_mode_name(ctrl), sp);
+      if (req == REQ_OP_PRIO) {
+        this->publish_(this->operation_mode_sensor_, mode);
+        this->publish_(this->control_mode_sensor_, ctrl);
+        this->publish_(this->setpoint_sensor_, sp);
+      }
+      break;
+    }
     default:
-      // Hierher kommt auch die 87/1-Antwort, solange ihr Typ nicht bekannt ist
       ESP_LOGD(TAG, "Unknown reply type %u (version %u, %u bytes): %s", r.type, r.version, r.len,
                format_hex_pretty(d, r.len).c_str());
       break;
