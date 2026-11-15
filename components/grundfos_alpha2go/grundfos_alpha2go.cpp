@@ -110,7 +110,7 @@ static const ControlModeDef CONTROL_MODES[] = {
     {10, "FlowAdapt", "FlowAdapt", SP_FLOW},
     {11, "ConstantDifferentialPressure", "Konstanter Differenzdruck", SP_PRESSURE},
     {12, "ConstantDifferentialTemperature", "Konstante Differenztemperatur", SP_UNKNOWN},
-    {13, "AutoAdaptRadiator", "AutoAdapt Heizkörper", SP_PRESSURE},
+    {13, "AutoAdaptRadiator", "AutoAdapt Heizkörper", SP_PRESSURE},  // Pa an HK1 verifiziert
     {14, "AutoAdaptUnderfloor", "AutoAdapt Fußbodenheizung", SP_PRESSURE},
     {15, "AutoAdaptRadiatorAndUnderfloor", "AutoAdapt Heizkörper + Fußboden", SP_PRESSURE},
     {24, "UserDefined", "Benutzerdefiniert", SP_UNKNOWN},

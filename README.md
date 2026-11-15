@@ -65,7 +65,8 @@ Messwerte von der Testpumpe (Heizkreis, Dauerbetrieb):
 **Sollwert:** Die Pumpe liefert ihn in SI-Einheiten, abhängig von der Regelart. Weil ein Sensor in Home Assistant eine feste Einheit braucht, gibt es getrennte Sensoren:
 `setpoint_head` gilt bei Druck-Regelarten (Konstant-/Proportionaldruck, Konstant-/Proportional-Differenzdruck, AutoAdapt), `setpoint_flow` bei Konstantem Durchfluss und FlowAdapt, `setpoint_speed` bei Konstantdrehzahl. Die jeweils anderen stehen dann auf „unbekannt“ (NaN).
 `setpoint_actual` ist der momentane Zielwert, den die Pumpe gerade ausregelt: bei Proportionaldruck der Punkt auf der Kurve beim aktuellen Durchfluss, er liegt nah an der tatsächlichen Förderhöhe.
-Verifiziert sind Proportionaldruck (Pa), Konstanter Durchfluss (m³/s) und Konstantdrehzahl (1/min); bei AutoAdapt und den übrigen Druck-Regelarten ist Pa angenommen.
+Verifiziert sind Proportionaldruck (Pa), AutoAdapt Heizkörper (Pa), Konstanter Durchfluss (m³/s) und Konstantdrehzahl (1/min); bei den übrigen Druck-Regelarten ist Pa angenommen.
+Bei AutoAdapt meldet 86/8 denselben Wert wie 86/7 (an HK1: 41 138 Pa = 4,19 m bei 3,2 m tatsächlicher Förderhöhe); `setpoint_actual` zeigt dort also den Kurvensollwert, nicht den momentanen Punkt.
 
 Codes für `operation_mode`: 0 = Auto, 1 = Stopp, 2 = Min, 3 = Max, 4 = Benutzerdefiniert, 7 = Hand, 8 = Standby.
 Codes für `control_mode`: 0 = Konstantdruck, 1 = Proportionaldruck, 2 = Konstantdrehzahl, 5 = AutoAdapt, 8 = Konstanter Durchfluss, 10 = FlowAdapt, 13 = AutoAdapt Heizkörper, 14 = AutoAdapt Fußboden, 15 = AutoAdapt Heizkörper + Fußboden, 254 = keine.
@@ -188,7 +189,6 @@ cl /std:c++17 /EHsc /I components\grundfos_alpha2go tests\test_geni.cpp /Fe:t.ex
 
 ## Offen
 
-- **Sollwert-Einheit** bei AutoAdapt angenommen (Pa), nicht geprüft.
 - **Schreiben** (Sollwert, Regelart) ist nicht implementiert. Laut Profil sind 86/6 und 86/10 (Typ 303) beschreibbar, aber das Format der SET-Anfrage steht nicht in der App-APK (nur im fehlenden Dart-Code). Dafür wird ein Bluetooth-Mitschnitt der GO-App beim Ändern des Sollwerts gebraucht.
 - Ungeprüft: Bond nach ESP-Neustart, andere Firmware-Stände, andere ALPHA2-GO-Varianten.
 
