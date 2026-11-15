@@ -193,15 +193,14 @@ void GrundfosAlpha2Go::publish_(sensor::Sensor *s, float value) {
 }
 
 // ble_client fuer RECONNECT_BACKOFF_MS abschalten (trennt die Verbindung) und danach wieder einschalten
+// Wird bei jeder Ablehnung aufgerufen und startet die Wartezeit neu (set_timeout mit gleichem Namen ersetzt den
+// laufenden Timer). Damit greift sie auch, wenn der ble_client waehrend der Wartezeit von Hand wieder
+// eingeschaltet wurde (z. B. per ble_client-Schalter in Home Assistant).
 void GrundfosAlpha2Go::start_reconnect_backoff_() {
-  if (this->backoff_active_) return;
-  this->backoff_active_ = true;
-  ESP_LOGI(TAG, "[%s] Waiting %u s before reconnecting (pump blocks quick reconnects; the Bluetooth button on the pump "
-                "lifts the block, but the ESP still waits)",
-           this->parent_->address_str(), (unsigned) (RECONNECT_BACKOFF_MS / 1000));
+  ESP_LOGI(TAG, "[%s] Waiting %u s before reconnecting", this->parent_->address_str(),
+           (unsigned) (RECONNECT_BACKOFF_MS / 1000));
   this->parent_->set_enabled(false);
   this->set_timeout("reconnect_backoff", RECONNECT_BACKOFF_MS, [this]() {
-    this->backoff_active_ = false;
     ESP_LOGD(TAG, "[%s] Reconnecting", this->parent_->address_str());
     this->parent_->set_enabled(true);
   });
@@ -280,6 +279,7 @@ void GrundfosAlpha2Go::gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_g
     ESP_LOGW(TAG, "[%s] Encryption rejected (reason=%d, attempt %u). Common right after a disconnect (the pump blocks "
                   "reconnects for ~80 s); if it persists, press the Bluetooth button on the pump while the ESP connects.",
              this->parent_->address_str(), param->ble_security.auth_cmpl.fail_reason, this->auth_fail_count_);
+    this->start_reconnect_backoff_();
   }
 }
 
@@ -399,10 +399,7 @@ void GrundfosAlpha2Go::loop() {
     case Stage::WAIT_ENC:
       // Verschluesselung abgelehnt: unverschluesselt antwortet die Pumpe nicht und trennt gleich -> nichts senden,
       // auf die Trennung warten; ESPHome verbindet danach automatisch neu.
-      if (this->auth_failed_) {
-        this->start_reconnect_backoff_();
-        break;
-      }
+      if (this->auth_failed_) break;  // Wartezeit laeuft bereits (in gap_event_handler gestartet)
       if (this->handles_ready_ && (this->enc_ok_ || now - this->t_stage_ > ENC_TIMEOUT_MS)) {
         if (!this->enc_ok_) ESP_LOGW(TAG, "No AUTH_CMPL seen, continuing anyway");
         this->stage_ = Stage::WAIT_CCCD;
