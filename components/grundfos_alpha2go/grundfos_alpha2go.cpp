@@ -54,6 +54,13 @@ void GrundfosAlpha2Go::dump_config() {
   LOG_BINARY_SENSOR("  ", "Night mode", this->night_mode_binary_sensor_);
   LOG_BINARY_SENSOR("  ", "Air detection enabled", this->air_detection_enabled_binary_sensor_);
   LOG_BINARY_SENSOR("  ", "Venting active", this->venting_active_binary_sensor_);
+  LOG_SWITCH("  ", "Pump", this->pump_switch_);
+  LOG_SWITCH("  ", "Night setback", this->night_setback_switch_);
+  LOG_SWITCH("  ", "Air detection", this->air_detection_switch_);
+  LOG_SELECT("  ", "Control mode", this->control_mode_select_);
+  LOG_NUMBER("  ", "Setpoint head", this->setpoint_head_number_);
+  LOG_NUMBER("  ", "Setpoint flow", this->setpoint_flow_number_);
+  LOG_NUMBER("  ", "Setpoint speed", this->setpoint_speed_number_);
 }
 
 static constexpr float PA_PER_M = 9806.65f;  // 1 m Wassersaeule
@@ -73,79 +80,6 @@ static const RequestDef REQUESTS[] = {
     {1 << 9, 90, 7, "90/7"},     {1 << 10, 88, 600, "88/600"}, {1 << 11, 88, 604, "88/604"},
     {1 << 12, 88, 612, "88/612"},
 };
-
-// ---- EXPERIMENTELL: Schreibtests ----
-void GrundfosAlpha2Go::test_command(uint8_t cmd) {
-  if (cmd < 5 || cmd > 8) {  // keine RESET/FACTORY_BOOT/USER_BOOT o. ae.
-    ESP_LOGE(TAG, "test_command(%u) refused - only 5 STOP, 6 START/AUTO, 7 REMOTE, 8 LOCAL allowed", cmd);
-    return;
-  }
-  uint8_t f[geni::MAX_TX_FRAME + 4];
-  const size_t n = geni::build_command(f, cmd);
-  char label[24];
-  snprintf(label, sizeof(label), "class 3 command %u", cmd);
-  this->queue_write_(f, n, label);
-}
-
-void GrundfosAlpha2Go::test_set_night_setback(bool enabled) {
-  const uint8_t v = enabled ? 1 : 0;
-  uint8_t f[geni::MAX_TX_FRAME + 4];
-  const size_t n = geni::build_object_set(f, 90, 8, geni::TYPE_AUTONIGHT_ENABLE, 1, &v, 1);
-  this->queue_write_(f, n, enabled ? "SET 90/8 = 1" : "SET 90/8 = 0");
-}
-
-void GrundfosAlpha2Go::test_set_operation(uint8_t source, uint8_t mode, uint8_t control, float setpoint) {
-  // 86/6 OperationStatusRequest (Typ 303 v1): u8 source, u8 mode, u8 control, float setpoint (SI, Big Endian)
-  uint8_t d[7] = {source, mode, control};
-  uint32_t u;
-  memcpy(&u, &setpoint, 4);
-  d[3] = (uint8_t) (u >> 24);
-  d[4] = (uint8_t) (u >> 16);
-  d[5] = (uint8_t) (u >> 8);
-  d[6] = (uint8_t) u;
-  uint8_t f[geni::MAX_TX_FRAME + 4];
-  const size_t n = geni::build_object_set(f, 86, 6, geni::TYPE_OPERATION_STATUS, 1, d, sizeof(d));
-  char label[64];
-  snprintf(label, sizeof(label), "SET 86/6 src=%u mode=%u ctrl=%u sp=%.1f", source, mode, control, setpoint);
-  this->queue_write_(f, n, label);
-}
-
-void GrundfosAlpha2Go::test_system_venting(bool start) {
-  // 88/612 SystemAirVentingCommandAndStatus (Typ 971 v1): u8 cmd (0 Stop, 1 StartManual), u8 state, u16 progress,
-  // u8 algorithm_state -> nur cmd ist relevant, Rest 0. 22 Byte -> zwei BLE-Writes.
-  const uint8_t d[5] = {(uint8_t) (start ? 1 : 0), 0, 0, 0, 0};
-  uint8_t f[geni::MAX_TX_FRAME + 4];
-  const size_t n = geni::build_object_set(f, 88, 612, geni::TYPE_AIR_VENTING_STATUS, 1, d, sizeof(d));
-  this->queue_write_(f, n, start ? "SET 88/612 cmd=StartManual" : "SET 88/612 cmd=Stop");
-}
-
-void GrundfosAlpha2Go::test_raw_class10(const std::vector<uint8_t> &apdu) {
-  uint8_t f[geni::MAX_TX_FRAME + 4];
-  const size_t n = geni::build_class10_raw(f, apdu.data(), apdu.size());
-  this->queue_write_(f, n, "raw class 10");
-}
-
-void GrundfosAlpha2Go::queue_write_(const uint8_t *frame, size_t len, const char *label) {
-  if (this->stage_ != Stage::POLLING) {
-    ESP_LOGW(TAG, "Test write '%s' ignored - pump not connected", label);
-    return;
-  }
-  if (len == 0 || len > sizeof(this->write_buf_)) {
-    ESP_LOGE(TAG, "Test write '%s' ignored - frame too long", label);
-    return;
-  }
-  memcpy(this->write_buf_, frame, len);
-  this->write_len_ = len;
-  ESP_LOGW(TAG, "Test write queued: %s", label);
-}
-
-// Nach Antwort oder Timeout: Wirkung sofort zuruecklesen
-void GrundfosAlpha2Go::finish_write_(const char *why) {
-  ESP_LOGW(TAG, "Test write finished (%s) - reading back status", why);
-  this->inflight_ = false;
-  this->last_req_ = 0;
-  this->pending_mask_ |= REQ_OP_LOCAL | REQ_OP_PRIO | REQ_OP_REALIZED | REQ_NIGHT_ENABLE | REQ_ELECTRIC | REQ_VENTING;
-}
 
 const char *GrundfosAlpha2Go::req_name_(uint16_t req) {
   if (req == REQ_WRITE) return "SET";
@@ -177,7 +111,6 @@ static const char *operation_mode_name(uint8_t v) {
 }
 
 // Regelart (Enum ControlMode). kind: Einheit des set_point -> Druck (Pa), Durchfluss (m3/s), Drehzahl (1/min)
-enum SetpointKind : uint8_t { SP_UNKNOWN = 0, SP_PRESSURE = 1, SP_FLOW = 2, SP_SPEED = 3 };
 struct ControlModeDef {
   uint8_t code;
   const char *name;
@@ -219,6 +152,187 @@ static SetpointKind setpoint_kind(uint8_t ctrl) {
   return m != nullptr ? m->kind : SP_UNKNOWN;
 }
 
+// ---- Schreibzugriffe ----
+// Regelarten des Select, Reihenfolge wie CONTROL_MODE_OPTIONS in select.py
+static const uint8_t SELECT_CONTROL_CODES[] = {1, 0, 13, 14, 8, 2};
+static constexpr size_t NUM_SELECT_CONTROL_CODES = sizeof(SELECT_CONTROL_CODES) / sizeof(SELECT_CONTROL_CODES[0]);
+// Startwerte, wenn in eine Regelart gewechselt wird, deren Sollwert in dieser Sitzung noch nie gelesen wurde
+static constexpr float DEFAULT_SP_PRESSURE = 2.0f * PA_PER_M;  // 2 m
+static constexpr float DEFAULT_SP_FLOW = 1.0f / 3600.0f;       // 1 m3/h
+static constexpr float DEFAULT_SP_SPEED = 3000.0f;             // 1/min
+static constexpr uint8_t MODE_STOP = 1;
+static constexpr uint8_t CMD_STOP = 5, CMD_START = 6;
+
+static bool is_autoadapt(uint8_t ctrl) { return ctrl == 5 || (ctrl >= 13 && ctrl <= 15); }
+
+bool GrundfosAlpha2Go::queue_write_(const uint8_t *frame, size_t len, const char *label) {
+  if (this->stage_ != Stage::POLLING) {
+    ESP_LOGW(TAG, "%s: not sent - pump not connected", label);
+    return false;
+  }
+  if (len == 0 || len > geni::MAX_TX_FRAME) {
+    ESP_LOGE(TAG, "%s: not sent - frame too long", label);
+    return false;
+  }
+  if (this->write_count_ >= WRITE_QUEUE) {
+    ESP_LOGW(TAG, "%s: not sent - write queue full", label);
+    return false;
+  }
+  auto &w = this->writes_[(this->write_head_ + this->write_count_) % WRITE_QUEUE];
+  memcpy(w.buf, frame, len);
+  w.len = (uint8_t) len;
+  w.label = label;
+  this->write_count_++;
+  ESP_LOGD(TAG, "%s: queued", label);
+  return true;
+}
+
+// Nach Antwort oder Timeout: Wirkung sofort zuruecklesen
+void GrundfosAlpha2Go::finish_write_(const char *why) {
+  ESP_LOGD(TAG, "%s: %s - reading back", this->write_label_, why);
+  this->inflight_ = false;
+  this->last_req_ = 0;
+  this->pending_mask_ |= REQ_AFTER_WRITE;
+}
+
+// Antwort pruefen: Class 3 -> APDU-ACK (obere 2 Bit) muss 0 sein; Class 10 -> zusaetzlich Statusbyte 0
+void GrundfosAlpha2Go::check_write_reply_(const uint8_t *d, size_t n) {
+  if (n < 6 || d[0] != geni::SD_REPLY) {
+    ESP_LOGW(TAG, "%s: unexpected reply %s", this->write_label_, format_hex_pretty(d, n).c_str());
+    return;
+  }
+  const uint8_t cls = d[4], hdr = d[5], ack = hdr >> 6;
+  const uint8_t status = (cls == geni::CLASS_OBJECT && (hdr & 0x3F) >= 1 && n > 6) ? d[6] : 0;
+  if (ack == 0 && status == 0) {
+    ESP_LOGI(TAG, "%s: accepted", this->write_label_);
+  } else {
+    // ACK 1/2/3: Klasse unbekannt / ID unbekannt / Operation nicht erlaubt;
+    // Status 1: Operation unbekannt, 4: Objekt/Typ nicht gefunden
+    ESP_LOGE(TAG, "%s: rejected by pump (class %u, ack %u, status %u): %s", this->write_label_, cls, ack, status,
+             format_hex_pretty(d, n).c_str());
+  }
+}
+
+bool GrundfosAlpha2Go::queue_set_operation_(uint8_t mode, uint8_t ctrl, float setpoint_si, const char *label) {
+  // 86/6 OperationStatusRequest (Typ 303 v1): u8 source, u8 mode, u8 control, float setpoint (SI, Big Endian)
+  uint8_t d[7] = {this->op_src_, mode, ctrl};
+  uint32_t u;
+  memcpy(&u, &setpoint_si, 4);
+  d[3] = (uint8_t) (u >> 24);
+  d[4] = (uint8_t) (u >> 16);
+  d[5] = (uint8_t) (u >> 8);
+  d[6] = (uint8_t) u;
+  uint8_t f[geni::MAX_TX_FRAME];
+  const size_t n = geni::build_object_set(f, 86, 6, geni::TYPE_OPERATION_STATUS, 1, d, sizeof(d));
+  ESP_LOGI(TAG, "%s: mode=%u control=%u (%s) setpoint=%g", label, mode, ctrl, control_mode_name(ctrl), setpoint_si);
+  return this->queue_write_(f, n, label);
+}
+
+bool GrundfosAlpha2Go::write_switch(SwitchKind kind, bool state) {
+  uint8_t f[geni::MAX_TX_FRAME];
+  switch (kind) {
+    case SwitchKind::PUMP: {
+      // Class 3 START (= Auto) / STOP; wirkt auf die lokale Anforderung 86/6 wie die GO-App
+      const size_t n = geni::build_command(f, state ? CMD_START : CMD_STOP);
+      return this->queue_write_(f, n, state ? "Pump start" : "Pump stop");
+    }
+    case SwitchKind::NIGHT_SETBACK: {
+      const uint8_t v = state ? 1 : 0;
+      const size_t n = geni::build_object_set(f, 90, 8, geni::TYPE_AUTONIGHT_ENABLE, 1, &v, 1);
+      return this->queue_write_(f, n, state ? "Night setback on" : "Night setback off");
+    }
+    case SwitchKind::AIR_DETECTION: {
+      // 88/600 wird komplett geschrieben: zuletzt gelesene Werte, nur "enabled" (Byte 7) geaendert
+      if (!this->air_cfg_valid_) {
+        ESP_LOGW(TAG, "Air detection: not sent - configuration (88/600) not read yet");
+        return false;
+      }
+      uint8_t d[8];
+      memcpy(d, this->air_cfg_, sizeof(d));
+      d[7] = state ? 1 : 0;
+      const size_t n = geni::build_object_set(f, 88, 600, geni::TYPE_AIR_DETECTION_CONFIG, 1, d, sizeof(d));
+      return this->queue_write_(f, n, state ? "Air detection on" : "Air detection off");
+    }
+  }
+  return false;
+}
+
+bool GrundfosAlpha2Go::write_control_mode(uint8_t ctrl) {
+  if (!this->op_valid_) {
+    ESP_LOGW(TAG, "Control mode: not sent - operation status (86/6) not read yet");
+    return false;
+  }
+  const SetpointKind kind = setpoint_kind(ctrl);
+  float sp;
+  if (kind == setpoint_kind(this->op_ctrl_)) {
+    sp = this->op_sp_;  // gleiche Einheit (z. B. Prop. Druck -> Konstantdruck): Sollwert uebernehmen
+  } else if (std::isfinite(this->last_sp_[kind])) {
+    sp = this->last_sp_[kind];
+  } else {
+    sp = kind == SP_FLOW ? DEFAULT_SP_FLOW : kind == SP_SPEED ? DEFAULT_SP_SPEED : DEFAULT_SP_PRESSURE;
+  }
+  // Bei AutoAdapt setzt die Pumpe ihren eigenen Sollwert, der mitgeschickte wird ignoriert (an HK1 geprueft)
+  return this->queue_set_operation_(this->op_mode_, ctrl, sp, "Control mode");
+}
+
+bool GrundfosAlpha2Go::write_setpoint(SetpointKind kind, float value) {
+  if (!this->op_valid_) {
+    ESP_LOGW(TAG, "Setpoint: not sent - operation status (86/6) not read yet");
+    return false;
+  }
+  if (setpoint_kind(this->op_ctrl_) != kind) {
+    ESP_LOGW(TAG, "Setpoint: not sent - does not match control mode %s", control_mode_name(this->op_ctrl_));
+    this->publish_controls_();
+    return false;
+  }
+  if (is_autoadapt(this->op_ctrl_)) {
+    ESP_LOGW(TAG, "Setpoint: not sent - AutoAdapt sets the setpoint itself");
+    this->publish_controls_();
+    return false;
+  }
+  const float si = kind == SP_PRESSURE ? value * PA_PER_M : kind == SP_FLOW ? value / 3600.0f : value;
+  return this->queue_set_operation_(this->op_mode_, this->op_ctrl_, si, "Setpoint");
+}
+
+bool GrundfosAlpha2Go::press_button(ButtonKind kind) {
+  // 88/612 SystemAirVentingCommandAndStatus (Typ 971 v1): u8 cmd (0 Stop, 1 StartManual), Rest 0
+  const bool start = kind == ButtonKind::VENTING_START;
+  const uint8_t d[5] = {(uint8_t) (start ? 1 : 0), 0, 0, 0, 0};
+  uint8_t f[geni::MAX_TX_FRAME];
+  const size_t n = geni::build_object_set(f, 88, 612, geni::TYPE_AIR_VENTING_STATUS, 1, d, sizeof(d));
+  return this->queue_write_(f, n, start ? "System venting start" : "System venting stop");
+}
+
+void GrundfosAlpha2Go::send_raw_class10(const std::vector<uint8_t> &apdu) {
+  uint8_t f[geni::MAX_TX_FRAME];
+  const size_t n = geni::build_class10_raw(f, apdu.data(), apdu.size());
+  this->queue_write_(f, n, "Raw class 10");
+}
+
+// Bedienelemente aus der lokalen Anforderung (86/6) aktualisieren
+void GrundfosAlpha2Go::publish_controls_() {
+  if (!this->op_valid_) return;
+  if (this->pump_switch_ != nullptr) this->pump_switch_->publish_state(this->op_mode_ != MODE_STOP);
+  if (this->control_mode_select_ != nullptr) {
+    for (size_t i = 0; i < NUM_SELECT_CONTROL_CODES; i++)
+      if (SELECT_CONTROL_CODES[i] == this->op_ctrl_) this->control_mode_select_->publish_state(i);
+  }
+  const SetpointKind kind = setpoint_kind(this->op_ctrl_);
+  if (this->setpoint_head_number_ != nullptr)
+    this->setpoint_head_number_->publish_state(kind == SP_PRESSURE ? this->op_sp_ / PA_PER_M : NAN);
+  if (this->setpoint_flow_number_ != nullptr)
+    this->setpoint_flow_number_->publish_state(kind == SP_FLOW ? this->op_sp_ * 3600.0f : NAN);
+  if (this->setpoint_speed_number_ != nullptr)
+    this->setpoint_speed_number_->publish_state(kind == SP_SPEED ? this->op_sp_ : NAN);
+}
+
+void GrundfosSwitch::write_state(bool state) { this->parent_->write_switch(this->kind_, state); }
+void GrundfosControlModeSelect::control(size_t index) {
+  if (index < NUM_SELECT_CONTROL_CODES) this->parent_->write_control_mode(SELECT_CONTROL_CODES[index]);
+}
+void GrundfosSetpointNumber::control(float value) { this->parent_->write_setpoint(this->kind_, value); }
+void GrundfosButton::press_action() { this->parent_->press_button(this->kind_); }
+
 void GrundfosAlpha2Go::setup() {
   if (this->flow_sensor_ != nullptr || this->head_sensor_ != nullptr) this->wanted_mask_ |= REQ_FLOW;
   if (this->power_sensor_ != nullptr || this->voltage_sensor_ != nullptr || this->dc_voltage_sensor_ != nullptr ||
@@ -244,6 +358,14 @@ void GrundfosAlpha2Go::setup() {
   if (this->air_detections_sensor_ != nullptr) this->wanted_mask_ |= REQ_AIR_COUNTER;
   if (this->venting_active_binary_sensor_ != nullptr || this->venting_status_text_sensor_ != nullptr)
     this->wanted_mask_ |= REQ_VENTING | REQ_OP_REALIZED;  // 86/8 fuer "Nur Pumpe entlueften"
+  // Bedienelemente
+  if (this->pump_switch_ != nullptr || this->control_mode_select_ != nullptr ||
+      this->setpoint_head_number_ != nullptr || this->setpoint_flow_number_ != nullptr ||
+      this->setpoint_speed_number_ != nullptr)
+    this->wanted_mask_ |= REQ_OP_LOCAL;
+  if (this->night_setback_switch_ != nullptr) this->wanted_mask_ |= REQ_NIGHT_ENABLE;
+  if (this->air_detection_switch_ != nullptr) this->wanted_mask_ |= REQ_AIR_CONFIG;
+  if (this->venting_buttons_present_) this->wanted_mask_ |= REQ_VENTING;
 }
 
 void GrundfosAlpha2Go::reset_state_() {
@@ -256,7 +378,9 @@ void GrundfosAlpha2Go::reset_state_() {
   this->inflight_ = false;
   this->last_req_ = 0;
   this->pending_mask_ = 0;
-  this->write_len_ = 0;  // nicht gesendeter Schreibtest verfaellt bei Trennung
+  this->write_count_ = 0;  // nicht gesendete Schreibzugriffe verfallen bei Trennung
+  this->op_valid_ = false;
+  this->air_cfg_valid_ = false;
   this->system_venting_state_ = 0;
   this->pump_venting_ = false;
   this->rx_.reset();
@@ -399,9 +523,8 @@ void GrundfosAlpha2Go::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
     case ESP_GATTC_NOTIFY_EVT: {
       if (param->notify.handle != this->data_handle_) break;
       ESP_LOGVV(TAG, "RX %d bytes", (int) param->notify.value_len);
-      if (this->inflight_ && this->last_req_ == REQ_WRITE) {  // Antwort auf Schreibtest: roh und gut sichtbar loggen
-        ESP_LOGW(TAG, "Test write RX: %s",
-                 format_hex_pretty(param->notify.value, param->notify.value_len).c_str());
+      if (this->inflight_ && this->last_req_ == REQ_WRITE) {  // Antwort auf einen Schreibzugriff
+        this->check_write_reply_(param->notify.value, param->notify.value_len);
         this->finish_write_("reply received");
       } else if (this->inflight_ && (this->last_req_ & REQ_DIAG_MASK))  // auch Antworten, die der Parser verwirft
         ESP_LOGV(TAG, "%s raw RX: %s", req_name_(this->last_req_),
@@ -500,18 +623,22 @@ void GrundfosAlpha2Go::loop() {
     case Stage::POLLING:
       if (this->inflight_ && now - this->t_last_tx_ > REPLY_TIMEOUT_MS) {
         if (this->last_req_ == REQ_WRITE) {
-          this->finish_write_("no reply within 1 s");
+          ESP_LOGW(TAG, "%s: no reply from pump", this->write_label_);
+          this->finish_write_("timeout");
         } else {
           ESP_LOGD(TAG, "Reply timeout (%s)", req_name_(this->last_req_));
           this->inflight_ = false;
         }
       }
-      if (!this->inflight_ && this->write_len_ != 0 && now - this->t_last_tx_ >= MIN_TX_GAP_MS) {
-        ESP_LOGW(TAG, "Test write TX: %s", format_hex_pretty(this->write_buf_, this->write_len_).c_str());
+      if (!this->inflight_ && this->write_count_ != 0 && now - this->t_last_tx_ >= MIN_TX_GAP_MS) {
+        const auto &w = this->writes_[this->write_head_];
+        this->write_head_ = (this->write_head_ + 1) % WRITE_QUEUE;
+        this->write_count_--;
+        this->write_label_ = w.label;
+        ESP_LOGD(TAG, "%s: TX %s", w.label, format_hex_pretty(w.buf, w.len).c_str());
         this->last_req_ = REQ_WRITE;
         this->inflight_ = true;
-        this->send_frame_(this->write_buf_, this->write_len_);
-        this->write_len_ = 0;
+        this->send_frame_(w.buf, w.len);
         break;
       }
       if (!this->inflight_ && this->pending_mask_ != 0 && now - this->t_last_tx_ >= MIN_TX_GAP_MS)
@@ -613,7 +740,15 @@ void GrundfosAlpha2Go::handle_reply_(const geni::Reply &r) {
       ESP_LOGD(TAG, "%s: source=%u mode=%u (%s) control=%u (%s) setpoint=%g", req_name_(req), src, mode,
                operation_mode_name(mode), ctrl, control_mode_name(ctrl), sp);
       const SetpointKind kind = setpoint_kind(ctrl);
-      if (req == REQ_OP_PRIO) {
+      if (req == REQ_OP_LOCAL) {
+        this->op_valid_ = true;
+        this->op_src_ = src;
+        this->op_mode_ = mode;
+        this->op_ctrl_ = ctrl;
+        this->op_sp_ = sp;
+        if (kind != SP_UNKNOWN && std::isfinite(sp)) this->last_sp_[kind] = sp;
+        this->publish_controls_();
+      } else if (req == REQ_OP_PRIO) {
         this->publish_(this->operation_mode_sensor_, mode);
         this->publish_(this->control_mode_sensor_, ctrl);
         this->publish_(this->setpoint_sensor_, sp);
@@ -640,6 +775,7 @@ void GrundfosAlpha2Go::handle_reply_(const geni::Reply &r) {
       if (r.len < 1) break;
       ESP_LOGD(TAG, "90/8: auto_night_enabled=%u", d[0]);
       this->publish_bin_(this->night_setback_enabled_binary_sensor_, d[0] != 0);
+      if (this->night_setback_switch_ != nullptr) this->night_setback_switch_->publish_state(d[0] != 0);
       break;
     case geni::TYPE_AUTONIGHT_STATUS:  // 90/7
       if (r.len < 1) break;
@@ -651,6 +787,9 @@ void GrundfosAlpha2Go::handle_reply_(const geni::Reply &r) {
       ESP_LOGD(TAG, "88/600: speed_change=%u pressure_change=%u sensitivity=%u ignore_start=%u enabled=%u",
                geni::be_u16(d + 0), geni::be_u16(d + 2), geni::be_u16(d + 4), d[6], d[7]);
       this->publish_bin_(this->air_detection_enabled_binary_sensor_, d[7] != 0);
+      memcpy(this->air_cfg_, d, sizeof(this->air_cfg_));
+      this->air_cfg_valid_ = true;
+      if (this->air_detection_switch_ != nullptr) this->air_detection_switch_->publish_state(d[7] != 0);
       break;
     case geni::TYPE_AIR_DETECT_COUNTER:  // 88/604
       if (r.len < 2) break;

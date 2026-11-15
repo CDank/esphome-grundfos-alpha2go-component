@@ -1,4 +1,4 @@
-# ESPHome-Komponente: Grundfos ALPHA2 GO (BLE, nur lesend)
+# ESPHome-Komponente: Grundfos ALPHA2 GO (BLE)
 
 Externe ESPHome-Komponente `grundfos_alpha2go` für die **ALPHA2 GO**. Die in ESPHome enthaltene `alpha3`-Komponente passt nicht:
 Sie fragt für Flow/Head ein Objekt ab (93/289), das nur die ursprüngliche ALPHA3 hat, und erwartet die ALPHA3-Antwortkennungen.
@@ -210,81 +210,84 @@ Mit MSVC (Developer Command Prompt):
 cl /std:c++17 /EHsc /I components\grundfos_alpha2go tests\test_geni.cpp /Fe:t.exe && t.exe
 ```
 
-## Experimentell: Schreibtests (nur Branch `feature/write-access`)
+## Bedienelemente (Schreibzugriff)
 
-Die Komponente schreibt nur, wenn eine der Testmethoden ausdrücklich aufgerufen wird. Anfrage (`Test write TX`) und Antwort (`Test write RX`) werden auf `WARN` roh geloggt. Danach liest sie Betriebsstatus (86/6–8), Elektrik (87/69) und Nachtabsenkung (90/8) sofort zurück.
+Die Bedienelemente schreiben über dieselbe BLE-Verbindung. Der angezeigte Zustand kommt immer aus der Pumpe: Nach jedem Schreibzugriff liest die Komponente Betriebsstatus, Nachtabsenkung, Lufterkennung und Entlüftung sofort zurück. Änderungen in der GO-App oder an der Pumpe erscheinen spätestens nach dem nächsten Abfragezyklus. Beim Booten schreibt der ESP nichts.
 
-| Methode | Telegramm | Status |
-|---|---|---|
-| `test_command(5)` / `(6)` / `(7)` / `(8)` | Class 3 STOP / START·AUTO / REMOTE / LOCAL: `27 05 E7 F8 03 81 <Befehl> CRC` | ✅ STOP und START an HK1 bestätigt (Antwort `03 00` = OK). LOCAL wird quittiert, ohne sichtbare Wirkung. REMOTE ist nicht getestet. |
-| `test_set_night_setback(true/false)` | Class-10-SET 90/8: `27 0E E7 F8 0A 8A 5A 00 08 01 4D 01 00 00 01 <0/1> CRC` | ✅ an HK1 bestätigt: Antwort `0A 01 00`, 90/8 liest danach 1 bzw. 0 zurück |
-| `test_set_operation(src, mode, ctrl, sp)` | Class-10-SET 86/6 (Typ 303): 24 Byte, auf zwei BLE-Writes (20 + 4) verteilt | ✅ an HK1 bestätigt: Sollwert 2,5 m → 2,4 m → 2,5 m und Regelart Prop. Druck → Konstantdruck (0, Sollwert in Pa) → Prop. Druck AutoAdapt (13) → Prop. Druck. Antwort jeweils `0A 01 00`, 86/6 und 86/7 übernehmen die Werte sofort. Bei AutoAdapt ignoriert die Pumpe den mitgeschickten Sollwert und setzt ihren eigenen (HK1: 41138 Pa). |
-| `test_system_venting(true/false)` | Class-10-SET 88/612 (Typ 971): cmd 1 = StartManual / 0 = Stop, 22 Byte | ✅ an HK1 bestätigt: nach einigen Sekunden meldet 88/612 `cmd=1 state=1 algorithm=1`, 86/8 zeigt Quelle 128 (SystemAirVenting) mit Konstantdrehzahl (3725–5025 1/min). Stop setzt 88/612 sofort auf 0. |
-| `test_raw_class10({...})` | beliebige Class-10-APDU (Kopfbyte + Daten), für Formatproben | Werkzeug |
+```yaml
+switch:
+  - platform: grundfos_alpha2go
+    grundfos_alpha2go_id: pumpe_go   # id der Komponente (sensor: platform: grundfos_alpha2go)
+    pump:
+      name: "Pumpe"
+    night_setback:
+      name: "Pumpe Nachtabsenkung"
+    air_detection:
+      name: "Pumpe Lufterkennung"
 
-STOP/START ändern die **lokale** Anforderung (86/6: Betriebsart Stopp/Auto, `control_source` bleibt Panel). Das wirkt wie eine Änderung in der GO-App. Regelart und Sollwert bleiben erhalten, und die App kann den Zustand danach normal wieder ändern.
+select:
+  - platform: grundfos_alpha2go
+    control_mode:
+      name: "Pumpe Regelart"
 
-**Class-10-SET:** `<0x80|n> <ID> <SubHi> <SubLo> <TypHi> <TypLo> <Ver> 00 00 <DatenLen> <Daten>`. Das ist der Objektkopf aus den GET-Antworten, nur ohne das führende Statusbyte. In der Antwort `0A 01 <Status>` ist das erste Datenbyte ein Statuscode (in der App `GeniClass10StatusCode`). Ergebnisse der Formatproben an HK1:
+number:
+  - platform: grundfos_alpha2go
+    setpoint_head:                   # Prop. Druck / Konstantdruck
+      name: "Pumpe Sollwert Förderhöhe"
+      mode: box
+    setpoint_flow:                   # Konstanter Förderstrom
+      name: "Pumpe Sollwert Förderstrom"
+    setpoint_speed:                  # Konstantdrehzahl
+      name: "Pumpe Sollwert Drehzahl"
+
+button:
+  - platform: grundfos_alpha2go
+    venting_start:
+      name: "Pumpe System-Entlüftung starten"
+    venting_stop:
+      name: "Pumpe System-Entlüftung stoppen"
+```
+
+`grundfos_alpha2go_id` kann entfallen, wenn es nur eine Pumpe gibt.
+
+| Entität | Wirkung | Telegramm | An HK1 geprüft |
+|---|---|---|---|
+| `switch.pump` | Ein = Betriebsart Auto, Aus = Stopp. Zustand aus 86/6. | Class 3 START (6) / STOP (5) | ✅ |
+| `switch.night_setback` | Nachtabsenkung (AutoNight) ein/aus | SET 90/8 | ✅ |
+| `switch.air_detection` | kontinuierliche Lufterkennung ein/aus. Die übrigen Werte aus 88/600 werden unverändert zurückgeschrieben. | SET 88/600 (25 Byte) | ❌ noch nicht |
+| `select.control_mode` | Prop. Druck, Konstantdruck, beide mit AutoAdapt, Konstanter Förderstrom, Konstantdrehzahl | SET 86/6 | ✅ Prop. Druck, Konstantdruck, Prop. Druck AutoAdapt. Förderstrom und Drehzahl sind noch nicht geprüft. |
+| `number.setpoint_head` | Sollwert in m, nur bei Prop. Druck und Konstantdruck | SET 86/6 | ✅ |
+| `number.setpoint_flow` | Sollwert in m³/h, nur bei Konstantem Förderstrom | SET 86/6 | ❌ noch nicht |
+| `number.setpoint_speed` | Sollwert in 1/min, nur bei Konstantdrehzahl | SET 86/6 | ❌ noch nicht |
+| `button.venting_start` / `venting_stop` | System-Entlüftung manuell starten / abbrechen | SET 88/612 | ✅ |
+
+Hinweise:
+- **Sollwerte:** Es gilt nur die Zahl, die zur aktiven Regelart passt. Die anderen stehen auf „unbekannt“, und Eingaben dort werden mit einer Warnung im Log verworfen. Bei AutoAdapt bestimmt die Pumpe den Sollwert selbst: `setpoint_head` zeigt ihn an, lässt sich dann aber nicht verstellen.
+- **Grenzen:** Die voreingestellten Grenzen (0,5–6 m, 0,1–3,5 m³/h, 1000–5500 1/min) sind Vorgaben und hängen vom Pumpentyp ab. Mit `min_value`, `max_value` und `step` lassen sie sich anpassen.
+- **Regelartwechsel:** Wechselt die Einheit, wird der zuletzt gelesene Sollwert dieser Einheit mitgeschickt. Gibt es noch keinen, gelten Startwerte: 2 m, 1 m³/h bzw. 3000 1/min. Zwischen Prop. Druck und Konstantdruck bleibt der Sollwert erhalten.
+- **Abgelehnte Befehle:** Lehnt die Pumpe einen Befehl ab, steht `rejected by pump` mit dem Statuscode im Log. Die Entität springt dann beim Zurücklesen auf den tatsächlichen Zustand.
+- STOP/START und alle SETs ändern die **lokale** Anforderung (86/6), genau wie die GO-App. Die App kann alles danach normal wieder ändern.
+
+### Schreibprotokoll (an HK1 ermittelt)
+
+- **Class 3 (Befehle):** `27 05 E7 F8 03 81 <Befehl> CRC`. Die Antwort `24 04 F8 E7 03 00 CRC` bedeutet OK. Die Befehle NIGHT_REDUCT_E/D (66/67) aus dem Profil kennt die ALPHA2 GO nicht und antwortet mit `03 81 <Befehl>` = ACK 10 (ID unbekannt).
+- **Class-10-SET:** `27 LE E7 F8 0A <0x80|n> <ID> <SubHi> <SubLo> <TypHi> <TypLo> <Ver> 00 00 <DatenLen> <Daten> CRC`. Das ist der Objektkopf aus den GET-Antworten ohne das führende Statusbyte. Die Antwort `0A 01 <Status>` enthält als erstes Datenbyte einen Statuscode (in der App `GeniClass10StatusCode`):
 
 | Anfrage | Status |
 |---|---|
-| GET/SET auf ein unbekanntes Objekt (90/9999) | `04` = Objekt nicht gefunden |
-| SET mit führendem `00` vor dem Typ, oder ganz ohne Objektkopf | `04` (Objekt/Typ passt nicht) |
 | SET mit Objektkopf ohne Statusbyte | `00` = OK |
+| GET/SET auf ein unbekanntes Objekt (90/9999) | `04` = Objekt nicht gefunden |
+| SET mit führendem `00` vor dem Typ, oder ganz ohne Objektkopf | `04` |
 | OS-Bits 01 (`0x40`) | `01` = Operation unbekannt |
 | OS-Bits 11 (INFO, `0xC3`) | APDU-ACK 11 = Operation nicht erlaubt (`0A C1 5A`) |
 
-Die Class-3-Befehle NIGHT_REDUCT_E/D (66/67) aus dem Profil kennt die ALPHA2 GO nicht. Sie antwortet mit `03 81 <Befehl>` = ACK 10 (ID unbekannt).
-
-Ein BLE-Write fasst 20 Byte. Längere Frames (z. B. SET 86/6 mit 24 Byte) teilt die Komponente in Stücke zu 20 Byte auf, so wie die Pumpe ihre Antworten zerlegt. Die Pumpe setzt die Stücke wieder zusammen (an HK1 bestätigt).
-
-`test_command` nimmt nur die Befehle 5–8 an (kein RESET, FACTORY_BOOT o. ä.). Rückgängig machen geht jederzeit in der GO-App (ESP vorher trennen).
-
-Einbindung zum Testen (die Komponente braucht eine `id`):
-
-```yaml
-external_components:
-  - source: github://CDank/esphome-grundfos-alpha2go-component@feature/write-access
-    components: [grundfos_alpha2go]
-    refresh: 0s
-
-sensor:
-  - platform: grundfos_alpha2go
-    id: pumpe_go
-    ble_client_id: pumpe
-    # ... Sensoren wie gewohnt ...
-
-button:
-  - platform: template
-    name: "Pumpe TEST Stopp"
-    on_press: [lambda: "id(pumpe_go).test_command(5);"]
-  - platform: template
-    name: "Pumpe TEST Start (Auto)"
-    on_press: [lambda: "id(pumpe_go).test_command(6);"]
-  - platform: template
-    name: "Pumpe TEST Nachtabsenkung EIN"
-    on_press: [lambda: "id(pumpe_go).test_set_night_setback(true);"]
-  - platform: template
-    name: "Pumpe TEST Nachtabsenkung AUS"
-    on_press: [lambda: "id(pumpe_go).test_set_night_setback(false);"]
-  # 86/6: Quelle, Betriebsart (0 Auto), Regelart (1 Prop. Druck), Sollwert in Pa (1 m = 9806.65 Pa)
-  - platform: template
-    name: "Pumpe TEST Sollwert unveraendert"
-    on_press: [lambda: "id(pumpe_go).test_set_operation(0, 0, 1, 24509.8f);"]
-  - platform: template
-    name: "Pumpe TEST Sollwert 2,4 m"
-    on_press: [lambda: "id(pumpe_go).test_set_operation(0, 0, 1, 23536.0f);"]
-  - platform: template
-    name: "Pumpe TEST System-Entlueftung START"
-    on_press: [lambda: "id(pumpe_go).test_system_venting(true);"]
-  - platform: template
-    name: "Pumpe TEST System-Entlueftung STOP"
-    on_press: [lambda: "id(pumpe_go).test_system_venting(false);"]
-```
+- **Lange Frames:** Ein BLE-Write fasst 20 Byte. Längere Frames (86/6: 24 Byte, 88/612: 22 Byte, 88/600: 25 Byte) schickt die Komponente in Stücken zu 20 Byte. Die Pumpe setzt sie wieder zusammen.
+- **Diagnose:** `id(pumpe_go).send_raw_class10({0x03, 0x5A, 0x00, 0x08});` sendet eine beliebige Class-10-APDU, zum Beispiel aus einem Template-Button. Die Antwort wird geprüft und geloggt.
 
 ## Offen
 
-- **Schreiben** (Sollwert, Regelart) ist nicht implementiert. Laut Profil sind 86/6 und 86/10 (Typ 303) beschreibbar, aber das Format der SET-Anfrage steht nicht in der App-APK (nur im fehlenden Dart-Code). Dafür wird ein Bluetooth-Mitschnitt der GO-App beim Ändern des Sollwerts gebraucht.
+- Noch nicht an der Pumpe geprüft: Schalter Lufterkennung, Sollwert bei Konstantem Förderstrom und Konstantdrehzahl.
+- „Nur Pumpe entlüften“ lässt sich nicht starten. Dafür ist in der App kein Objekt zu finden; die Funktion ist nur als Steuerquelle 111 in 86/8 sichtbar.
 - Ungeprüft: andere Firmware-Stände, andere ALPHA2-GO-Varianten.
 
 Lizenz: MIT. Unabhängiges Projekt, nicht von Grundfos.

@@ -30,8 +30,11 @@ from esphome.const import (
     UNIT_WATT,
 )
 
+from . import GrundfosAlpha2Go
+
 DEPENDENCIES = ["ble_client"]
-AUTO_LOAD = ["binary_sensor", "text_sensor"]
+# Bedienelemente (switch/select/number/button) werden im Hub-Code referenziert
+AUTO_LOAD = ["binary_sensor", "text_sensor", "switch", "select", "number", "button"]
 
 CONF_DC_VOLTAGE = "dc_voltage"
 CONF_AUX_TEMPERATURE = "aux_temperature"
@@ -57,10 +60,6 @@ CONF_NIGHT_MODE = "night_mode"
 CONF_AIR_DETECTION_ENABLED = "air_detection_enabled"
 CONF_VENTING_ACTIVE = "venting_active"
 
-ns = cg.esphome_ns.namespace("grundfos_alpha2go")
-GrundfosAlpha2Go = ns.class_(
-    "GrundfosAlpha2Go", ble_client.BLEClientNode, cg.PollingComponent
-)
 
 
 def _temp():

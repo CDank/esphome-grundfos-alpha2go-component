@@ -97,3 +97,35 @@ sensor:
       name: "Pumpe Entlüftung aktiv"
     venting_status:
       name: "Pumpe Entlüftung Status"
+
+# Bedienelemente (schreiben auf die Pumpe, Zustand wird immer zurueckgelesen)
+switch:
+  - platform: grundfos_alpha2go
+    pump:
+      name: "Pumpe"
+    night_setback:
+      name: "Pumpe Nachtabsenkung"
+    air_detection:
+      name: "Pumpe Lufterkennung"
+
+select:
+  - platform: grundfos_alpha2go
+    control_mode:
+      name: "Pumpe Regelart"
+
+number:
+  - platform: grundfos_alpha2go
+    setpoint_head:              # nur bei Prop. Druck / Konstantdruck
+      name: "Pumpe Sollwert Förderhöhe"
+      mode: box
+    setpoint_flow:              # nur bei Konstantem Förderstrom
+      name: "Pumpe Sollwert Förderstrom"
+    setpoint_speed:             # nur bei Konstantdrehzahl
+      name: "Pumpe Sollwert Drehzahl"
+
+button:
+  - platform: grundfos_alpha2go
+    venting_start:
+      name: "Pumpe System-Entlüftung starten"
+    venting_stop:
+      name: "Pumpe System-Entlüftung stoppen"
