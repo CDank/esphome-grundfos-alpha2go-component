@@ -33,7 +33,7 @@ Prüft CRC und Request-Frames gegen die Referenzen (ESPHome-`alpha3`, Mitschnitt
 ## Offen
 
 - Schreiben (Sollwert, Regelart) ist nicht implementiert; das SET-Format ist nicht belegt.
-- Flow/Head werden aus Offset 0/4 gerechnet (am Mitschnitt gegen die App geprüft). Die Felder @24/28/32 (m³/h, m, kv) stehen bei `logger: VERBOSE` im Log zum Vergleich.
+- Flow/Head kommen direkt aus @24/@28 (m³/h, m), wie von der Pumpe geliefert. Nur bei kürzeren Antworten wird aus @0 (m³/s) und @4 (Pa) gerechnet.
 - Ungeprüft: Bond nach ESP-Neustart, andere Firmware, andere ALPHA2-GO-Varianten.
 
 Lizenz: MIT. Unabhängiges Projekt, nicht von Grundfos.

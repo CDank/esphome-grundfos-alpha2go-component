@@ -51,7 +51,8 @@ int main() {
   assert(std::vector<uint8_t>(ch.begin() + 5, ch.begin() + 13) == hex("23 00 00 f8 02 00 00 1c"));
 
   // Reassemblierung mit zerstueckelten Notifications (7/20/1 Byte), Muell davor, kaputter Frame dazwischen
-  auto flow = reply(565, 2, floats({1.53f / 3600.f, 42400.f, NAN, NAN, NAN, NAN, 1.53f, 4.24f, 2.4f}));
+  // Werte aus dem Hardware-Log (ALPHA2 GO HK1, 15.11.2026): @0 m3/s, @4 Pa, @24 m3/h, @28 m, @32 kv
+  auto flow = reply(565, 2, floats({0.000469495f, 20716.4f, NAN, NAN, NAN, NAN, 1.690f, 2.113f, 3.696f}));
   auto elec = reply(256, 3, floats({235.2f, 324.0f, 0.169f, 37.88f, 38.f, 4542.f, NAN, NAN, 51.0f, 0.f}));
   std::vector<uint8_t> hist(28, 0);
   hist[3] = 6;                                   // starts = 6
@@ -64,16 +65,21 @@ int main() {
   for (size_t chunk : {1u, 7u, 20u, 64u}) {
     Reassembler r;
     int n_flow = 0, n_elec = 0, n_cnt = 0, errs = 0;
-    float q = 0, h = 0, u = 0, p = 0, rpm = 0, aux = 0, starts = 0, hours = 0;
+    float q = 0, h = 0, q_calc = 0, h_calc = 0, u = 0, p = 0, rpm = 0, aux = 0, starts = 0, hours = 0;
     for (size_t i = 0; i < stream.size(); i += chunk) {
       errs += r.feed(stream.data() + i, std::min(chunk, stream.size() - i), [&](const Reply &rp) {
-        if (rp.type == TYPE_PROCESS_VALUES_EXT) { n_flow++; q = be_float(rp.data) * 3600.f; h = be_float(rp.data + 4) * 0.0001f; }
+        if (rp.type == TYPE_PROCESS_VALUES_EXT) {
+          n_flow++;
+          q = be_float(rp.data + 24); h = be_float(rp.data + 28);                              // direkt
+          q_calc = be_float(rp.data) * 3600.f; h_calc = be_float(rp.data + 4) / 9806.65f;     // Rueckfall
+        }
         if (rp.type == TYPE_MOTOR_DETAILS) { n_elec++; u = be_float(rp.data); p = be_float(rp.data + 12); rpm = be_float(rp.data + 20); aux = be_float(rp.data + 32); }
         if (rp.type == TYPE_OPERATION_HISTORY) { n_cnt++; starts = be_u32(rp.data); hours = be_u32(rp.data + 8) / 3600.f; }
       });
     }
     assert(errs == 1 && n_flow == 1 && n_elec == 1 && n_cnt == 1);
-    assert(fabsf(q - 1.53f) < 1e-3 && fabsf(h - 4.24f) < 1e-3);
+    assert(fabsf(q - 1.690f) < 1e-4 && fabsf(h - 2.113f) < 1e-4);
+    assert(fabsf(q_calc - q) < 1e-3 && fabsf(h_calc - h) < 1e-3);  // Rueckfall-Umrechnung trifft @24/@28
     assert(fabsf(u - 235.2f) < 1e-3 && fabsf(p - 37.88f) < 1e-3 && rpm == 4542.f && aux == 51.0f);
     assert(starts == 6 && fabsf(hours - 8752.97f) < 0.05f);
   }

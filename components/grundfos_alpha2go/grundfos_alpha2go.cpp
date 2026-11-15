@@ -257,9 +257,14 @@ void GrundfosAlpha2Go::handle_reply_(const geni::Reply &r) {
   ESP_LOGV(TAG, "Reply type=%u version=%u len=%u", r.type, r.version, r.len);
   switch (r.type) {
     case geni::TYPE_PROCESS_VALUES_EXT:  // 93/290, v2, 36 Byte
-      if (r.len >= 8) {
-        this->publish_(this->flow_sensor_, geni::be_float(d + 0) * 3600.0f);  // m3/s -> m3/h
-        this->publish_(this->head_sensor_, geni::be_float(d + 4) * 0.0001f);  // -> m
+      if (r.len >= 32) {
+        // Pumpe liefert Flow/Head fertig umgerechnet (auf ALPHA2 GO HK1 verifiziert)
+        this->publish_(this->flow_sensor_, geni::be_float(d + 24));  // m3/h
+        this->publish_(this->head_sensor_, geni::be_float(d + 28));  // m
+      } else if (r.len >= 8) {
+        // Rueckfall fuer kuerzere Antworten: @0 in m3/s, @4 in Pa
+        this->publish_(this->flow_sensor_, geni::be_float(d + 0) * 3600.0f);   // m3/s -> m3/h
+        this->publish_(this->head_sensor_, geni::be_float(d + 4) / 9806.65f);  // Pa -> m Wassersaeule
       }
       if (r.len >= 36) {
         ESP_LOGV(TAG, "565: f0=%g f4=%g f8=%g f12=%g f16=%g f20=%g", geni::be_float(d + 0), geni::be_float(d + 4),
