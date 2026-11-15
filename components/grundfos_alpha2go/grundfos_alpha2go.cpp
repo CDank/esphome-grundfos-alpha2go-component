@@ -15,6 +15,7 @@ static const char *const TAG = "grundfos_alpha2go";
 static const uint32_t ENC_TIMEOUT_MS = 1500;    // so lange auf AUTH_CMPL warten, danach trotzdem weiter
 static const uint32_t CCCD_TIMEOUT_MS = 2000;
 static const uint32_t REPLY_TIMEOUT_MS = 1000;  // wie die GO-App (GENI_TIMEOUT)
+static const uint32_t AUTH_FAIL_DISCONNECT_MS = 5000; // nach abgelehnter Verschluesselung spaetestens dann trennen
 static const uint32_t MIN_TX_GAP_MS = 30;       // Pumpe antwortet nach ca. 80 ms; nur eine Anfrage gleichzeitig
 
 static const espbt::ESPBTUUID GENI_SERVICE = espbt::ESPBTUUID::from_uint16(0xFE5D);
@@ -174,6 +175,7 @@ void GrundfosAlpha2Go::reset_state_() {
   this->stage_ = Stage::IDLE;
   this->handles_ready_ = false;
   this->enc_ok_ = false;
+  this->auth_failed_ = false;
   this->cccd_tries_ = 0;
   this->hello_sent_ = 0;
   this->inflight_ = false;
@@ -251,10 +253,16 @@ void GrundfosAlpha2Go::gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_g
   if (param->ble_security.auth_cmpl.success) {
     ESP_LOGD(TAG, "[%s] Link encrypted", this->parent_->address_str());
     this->enc_ok_ = true;
+    this->auth_fail_count_ = 0;
   } else {
-    ESP_LOGW(TAG, "[%s] Authentication failed (reason=%d). Reason 82 (0x52): pump is not in pairing mode - press the "
-                  "Bluetooth button on the pump while the ESP connects.",
-             this->parent_->address_str(), param->ble_security.auth_cmpl.fail_reason);
+    // Beobachtet an HK1: Direkt nach einer Trennung (ESP oder App) lehnt die Pumpe die Verschluesselung oft mit
+    // reason 82 ab, obwohl der Bond besteht. Ein Druck auf die Bluetooth-Taste behebt das sofort; teils klappt es
+    // auch ohne Tastendruck bei einem spaeteren Versuch (Dauer noch nicht ermittelt).
+    this->auth_failed_ = true;
+    this->auth_fail_count_++;
+    ESP_LOGW(TAG, "[%s] Encryption rejected (reason=%d, attempt %u). Common right after a disconnect; the ESP retries "
+                  "automatically. Pressing the Bluetooth button on the pump fixes it immediately.",
+             this->parent_->address_str(), param->ble_security.auth_cmpl.fail_reason, this->auth_fail_count_);
   }
 }
 
@@ -372,6 +380,16 @@ void GrundfosAlpha2Go::loop() {
   uint32_t now = millis();
   switch (this->stage_) {
     case Stage::WAIT_ENC:
+      // Verschluesselung abgelehnt: unverschluesselt antwortet die Pumpe nicht und trennt gleich -> nichts senden,
+      // auf die Trennung warten; ESPHome verbindet danach automatisch neu.
+      if (this->auth_failed_) {
+        if (now - this->t_stage_ > AUTH_FAIL_DISCONNECT_MS) {  // Pumpe trennt nicht selbst -> neu anfangen
+          ESP_LOGD(TAG, "[%s] Disconnecting after rejected encryption", this->parent_->address_str());
+          this->parent_->disconnect();
+          this->t_stage_ = now;
+        }
+        break;
+      }
       if (this->handles_ready_ && (this->enc_ok_ || now - this->t_stage_ > ENC_TIMEOUT_MS)) {
         if (!this->enc_ok_) ESP_LOGW(TAG, "No AUTH_CMPL seen, continuing anyway");
         this->stage_ = Stage::WAIT_CCCD;

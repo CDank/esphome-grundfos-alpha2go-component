@@ -108,6 +108,8 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
   uint16_t cccd_handle_{0};
   bool handles_ready_{false};
   bool enc_ok_{false};
+  bool auth_failed_{false};      // Verschluesselung in dieser Verbindung abgelehnt
+  uint8_t auth_fail_count_{0};   // aufeinanderfolgende Ablehnungen ueber Verbindungen hinweg
   uint8_t cccd_tries_{0};
   uint8_t hello_sent_{0};
   uint32_t t_stage_{0};

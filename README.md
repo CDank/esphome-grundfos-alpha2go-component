@@ -89,6 +89,7 @@ Bei einem Verbindungsabbruch gehen alle Sensoren auf `NaN`.
 
 1. `example/grundfos-alpha2go.yaml` anpassen (`pump_mac`, WLAN).
 2. Flashen. **Beim ersten Verbinden die Bluetooth-Taste an der Pumpe drücken**, sonst `auth fail reason=82`. Der Bond liegt danach im Flash des ESP32 und übersteht Neustarts und OTA-Updates: An der Testpumpe hat sich der ESP nach mehreren OTA-Updates jedes Mal ohne erneuten Tastendruck wieder verbunden.
+   **Ausnahme:** Wird die Verbindung getrennt (ESP oder GO-App) und direkt danach neu aufgebaut, lehnt die Pumpe die Verschlüsselung oft mit `reason=82` ab, obwohl der Bond besteht. Der ESP versucht es automatisch erneut; ein Druck auf die Bluetooth-Taste behebt es sofort. Teils klappt es auch ohne Tastendruck bei einem späteren Versuch – wie lange die Pumpe sperrt, ist noch nicht ermittelt.
 3. Die GO-App auf dem Handy schließen. Die Pumpe akzeptiert nur einen Client.
 
 Ablauf pro Verbindung: Verschlüsselung → CCCD schreiben → Erstabfrage der App → Abfragen nacheinander (eine gleichzeitig, 30 ms Abstand, 1 s Timeout).
