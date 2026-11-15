@@ -70,10 +70,15 @@ sensor:
       name: "Pumpe Controlbox-Temperatur"
     energy:                     # Zaehler der Pumpe (wie "Kumulierte Leistungsaufnahme" in der App)
       name: "Pumpe Energie"
-    # Regelart/Sollwert aus 86/7 (Codes siehe README), auf der ALPHA2 GO noch ungetestet:
-    operation_mode:
+    # Betriebsart/Regelart als Klartext (Zahlencodes: operation_mode / control_mode, siehe README)
+    operation_mode_text:
       name: "Pumpe Betriebsart"
-    control_mode:
+    control_mode_text:
       name: "Pumpe Regelart"
-    setpoint:
-      name: "Pumpe Sollwert"
+    # Sollwert: je nach Regelart in m oder m3/h, der andere Sensor ist dann "unbekannt"
+    setpoint_head:
+      name: "Pumpe Sollwert Förderhöhe"
+    setpoint_flow:
+      name: "Pumpe Sollwert Durchfluss"
+    setpoint_actual:
+      name: "Pumpe Zielwert aktuell"

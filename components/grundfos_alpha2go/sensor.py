@@ -1,5 +1,5 @@
 import esphome.codegen as cg
-from esphome.components import ble_client, sensor
+from esphome.components import ble_client, sensor, text_sensor
 import esphome.config_validation as cv
 from esphome.const import (
     CONF_CURRENT,
@@ -30,6 +30,7 @@ from esphome.const import (
 )
 
 DEPENDENCIES = ["ble_client"]
+AUTO_LOAD = ["text_sensor"]
 
 CONF_DC_VOLTAGE = "dc_voltage"
 CONF_AUX_TEMPERATURE = "aux_temperature"
@@ -42,6 +43,11 @@ CONF_POWER_ON_HOURS = "power_on_hours"
 CONF_OPERATION_MODE_SENSOR = "operation_mode"
 CONF_CONTROL_MODE_SENSOR = "control_mode"
 CONF_SETPOINT_SENSOR = "setpoint"
+CONF_SETPOINT_HEAD = "setpoint_head"
+CONF_SETPOINT_FLOW = "setpoint_flow"
+CONF_SETPOINT_ACTUAL = "setpoint_actual"
+CONF_OPERATION_MODE_TEXT = "operation_mode_text"
+CONF_CONTROL_MODE_TEXT = "control_mode_text"
 
 ns = cg.esphome_ns.namespace("grundfos_alpha2go")
 GrundfosAlpha2Go = ns.class_(
@@ -140,10 +146,38 @@ CONFIG_SCHEMA = (
                 icon="mdi:tune-variant",
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
+            # Rohwert in SI-Einheit (Pa bei Druck-, m3/s bei Durchfluss-Regelarten)
             cv.Optional(CONF_SETPOINT_SENSOR): sensor.sensor_schema(
-                accuracy_decimals=3,
+                accuracy_decimals=6,
                 icon="mdi:target",
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            # Sollwert als Foerderhoehe; NaN, wenn die Regelart keinen Drucksollwert hat
+            cv.Optional(CONF_SETPOINT_HEAD): sensor.sensor_schema(
+                unit_of_measurement=UNIT_METER,
+                accuracy_decimals=2,
+                icon="mdi:target",
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            # Sollwert als Durchfluss; NaN, wenn die Regelart keinen Durchflusssollwert hat
+            cv.Optional(CONF_SETPOINT_FLOW): sensor.sensor_schema(
+                unit_of_measurement=UNIT_CUBIC_METER_PER_HOUR,
+                accuracy_decimals=2,
+                icon="mdi:target",
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            # Momentaner Zielwert (86/8), z. B. Punkt auf der Proportionaldruck-Kurve
+            cv.Optional(CONF_SETPOINT_ACTUAL): sensor.sensor_schema(
+                unit_of_measurement=UNIT_METER,
+                accuracy_decimals=2,
+                icon="mdi:target-variant",
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_OPERATION_MODE_TEXT): text_sensor.text_sensor_schema(
+                icon="mdi:state-machine",
+            ),
+            cv.Optional(CONF_CONTROL_MODE_TEXT): text_sensor.text_sensor_schema(
+                icon="mdi:tune-variant",
             ),
         }
     )
@@ -176,3 +210,13 @@ async def to_code(config):
     await sensors(CONF_OPERATION_MODE_SENSOR, var.set_operation_mode_sensor)
     await sensors(CONF_CONTROL_MODE_SENSOR, var.set_control_mode_sensor)
     await sensors(CONF_SETPOINT_SENSOR, var.set_setpoint_sensor)
+    await sensors(CONF_SETPOINT_HEAD, var.set_setpoint_head_sensor)
+    await sensors(CONF_SETPOINT_FLOW, var.set_setpoint_flow_sensor)
+    await sensors(CONF_SETPOINT_ACTUAL, var.set_setpoint_actual_sensor)
+
+    if conf := config.get(CONF_OPERATION_MODE_TEXT):
+        ts = await text_sensor.new_text_sensor(conf)
+        cg.add(var.set_operation_mode_text_sensor(ts))
+    if conf := config.get(CONF_CONTROL_MODE_TEXT):
+        ts = await text_sensor.new_text_sensor(conf)
+        cg.add(var.set_control_mode_text_sensor(ts))

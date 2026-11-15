@@ -4,6 +4,7 @@
 #include "esphome/components/ble_client/ble_client.h"
 #include "esphome/components/esp32_ble_tracker/esp32_ble_tracker.h"
 #include "esphome/components/sensor/sensor.h"
+#include "esphome/components/text_sensor/text_sensor.h"
 #include "geni.h"
 
 #ifdef USE_ESP32
@@ -34,7 +35,12 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
   SUB_SENSOR(energy)          // 87/1 system_energy (J) -> kWh
   SUB_SENSOR(operation_mode)  // 86/7 operation_mode (0=Auto, 1=Stop, 2=Min, 3=Max, ...)
   SUB_SENSOR(control_mode)    // 86/7 control_mode (1=PP, 2=CS, 5=AutoAdapt, 13..15=AutoAdapt-Varianten, ...)
-  SUB_SENSOR(setpoint)        // 86/7 set_point, Rohwert
+  SUB_SENSOR(setpoint)        // 86/7 set_point, Rohwert in SI (Pa bzw. m3/s)
+  SUB_SENSOR(setpoint_head)   // 86/7 set_point in m, nur bei Druck-Regelarten
+  SUB_SENSOR(setpoint_flow)   // 86/7 set_point in m3/h, nur bei Durchfluss-Regelart
+  SUB_SENSOR(setpoint_actual) // 86/8 momentaner Zielwert in m, nur bei Druck-Regelarten
+  SUB_TEXT_SENSOR(operation_mode)  // Klartext zu operation_mode
+  SUB_TEXT_SENSOR(control_mode)    // Klartext zu control_mode
 
  public:
   void setup() override;
@@ -72,6 +78,8 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
   void send_next_request_();
   void handle_reply_(const geni::Reply &r);
   void publish_(sensor::Sensor *s, float value);
+  void publish_or_nan_(sensor::Sensor *s, float value);  // NaN wird ebenfalls gesendet (Wert gilt gerade nicht)
+  void publish_text_(text_sensor::TextSensor *s, const char *value);
   void publish_all_nan_();
 
   Stage stage_{Stage::IDLE};

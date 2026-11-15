@@ -3,6 +3,7 @@
 #include "esphome/core/helpers.h"
 #include "esphome/core/hal.h"
 #include <cmath>
+#include <cstdio>
 
 #ifdef USE_ESP32
 
@@ -38,8 +39,15 @@ void GrundfosAlpha2Go::dump_config() {
   LOG_SENSOR("  ", "Energy", this->energy_sensor_);
   LOG_SENSOR("  ", "Operation mode", this->operation_mode_sensor_);
   LOG_SENSOR("  ", "Control mode", this->control_mode_sensor_);
-  LOG_SENSOR("  ", "Setpoint (raw)", this->setpoint_sensor_);
+  LOG_SENSOR("  ", "Setpoint (raw, SI)", this->setpoint_sensor_);
+  LOG_SENSOR("  ", "Setpoint head", this->setpoint_head_sensor_);
+  LOG_SENSOR("  ", "Setpoint flow", this->setpoint_flow_sensor_);
+  LOG_SENSOR("  ", "Setpoint actual", this->setpoint_actual_sensor_);
+  LOG_TEXT_SENSOR("  ", "Operation mode text", this->operation_mode_text_sensor_);
+  LOG_TEXT_SENSOR("  ", "Control mode text", this->control_mode_text_sensor_);
 }
+
+static constexpr float PA_PER_M = 9806.65f;  // 1 m Wassersaeule
 
 // Abfragen in Sende-Reihenfolge
 struct RequestDef {
@@ -59,32 +67,67 @@ const char *GrundfosAlpha2Go::req_name_(uint8_t req) {
   return "?";
 }
 
+// Betriebsart (Enum OperationMode im GENI-Profil): Name fuer das Log, Klartext fuer HA
+struct OperationModeDef {
+  const char *name;
+  const char *text;
+};
+static const OperationModeDef OPERATION_MODES[] = {
+    {"Auto", "Auto"},           {"Stop", "Stopp"},
+    {"Min", "Minimum"},         {"Max", "Maximum"},
+    {"UserDefined", "Benutzerdefiniert"},       {"ForcedStart", "Zwangsstart"},
+    {"NoCmd", "Kein Befehl"},   {"Hand", "Hand"},
+    {"Standby", "Standby"},     {"StopWithoutDelay", "Stopp sofort"},
+    {"EmergencyRun", "Notbetrieb"},             {"UserDefined2", "Benutzerdefiniert 2"},
+    {"SetPumpsToLocalMode", "Lokalbetrieb"},
+};
+static const OperationModeDef *operation_mode_def(uint8_t v) {
+  return v < sizeof(OPERATION_MODES) / sizeof(OPERATION_MODES[0]) ? &OPERATION_MODES[v] : nullptr;
+}
 static const char *operation_mode_name(uint8_t v) {
-  static const char *const names[] = {"Auto",    "Stop",          "Min",          "Max",         "UserDefined",
-                                      "ForcedStart", "NoCmd",     "Hand",         "Standby",     "StopWithoutDelay",
-                                      "EmergencyRun", "UserDefined2", "SetPumpsToLocalMode"};
-  return v < sizeof(names) / sizeof(names[0]) ? names[v] : "?";
+  auto *m = operation_mode_def(v);
+  return m != nullptr ? m->name : "?";
 }
 
+// Regelart (Enum ControlMode). kind: Einheit des set_point -> 0 unbekannt, 1 Druck (Pa), 2 Durchfluss (m3/s)
+enum SetpointKind : uint8_t { SP_UNKNOWN = 0, SP_PRESSURE = 1, SP_FLOW = 2 };
+struct ControlModeDef {
+  uint8_t code;
+  const char *name;
+  const char *text;
+  SetpointKind kind;
+};
+static const ControlModeDef CONTROL_MODES[] = {
+    {0, "ConstantPressure", "Konstantdruck", SP_PRESSURE},
+    {1, "ProportionalPressure", "Proportionaldruck", SP_PRESSURE},  // Pa an HK1 verifiziert
+    {2, "ConstantSpeed", "Konstantdrehzahl", SP_UNKNOWN},
+    {5, "AutoAdapt", "AutoAdapt", SP_PRESSURE},
+    {6, "ConstantTemperature", "Konstanttemperatur", SP_UNKNOWN},
+    {7, "ClosedLoopSensor", "Sensorregelung", SP_UNKNOWN},
+    {8, "ConstantFlow", "Konstanter Durchfluss", SP_FLOW},  // m3/s an HK1 verifiziert
+    {9, "ConstantLevel", "Konstantes Niveau", SP_UNKNOWN},
+    {10, "FlowAdapt", "FlowAdapt", SP_FLOW},
+    {11, "ConstantDifferentialPressure", "Konstanter Differenzdruck", SP_PRESSURE},
+    {12, "ConstantDifferentialTemperature", "Konstante Differenztemperatur", SP_UNKNOWN},
+    {13, "AutoAdaptRadiator", "AutoAdapt Heizkörper", SP_PRESSURE},
+    {14, "AutoAdaptUnderfloor", "AutoAdapt Fußbodenheizung", SP_PRESSURE},
+    {15, "AutoAdaptRadiatorAndUnderfloor", "AutoAdapt Heizkörper + Fußboden", SP_PRESSURE},
+    {24, "UserDefined", "Benutzerdefiniert", SP_UNKNOWN},
+    {26, "ProportionalDifferentialPressure", "Proportionaler Differenzdruck", SP_PRESSURE},
+    {254, "None", "Keine", SP_UNKNOWN},
+};
+static const ControlModeDef *control_mode_def(uint8_t v) {
+  for (const auto &m : CONTROL_MODES)
+    if (m.code == v) return &m;
+  return nullptr;
+}
 static const char *control_mode_name(uint8_t v) {
-  switch (v) {
-    case 0: return "ConstantPressure";
-    case 1: return "ProportionalPressure";
-    case 2: return "ConstantSpeed";
-    case 5: return "AutoAdapt";
-    case 6: return "ConstantTemperature";
-    case 7: return "ClosedLoopSensor";
-    case 8: return "ConstantFlow";
-    case 10: return "FlowAdapt";
-    case 11: return "ConstantDifferentialPressure";
-    case 12: return "ConstantDifferentialTemperature";
-    case 13: return "AutoAdaptRadiator";
-    case 14: return "AutoAdaptUnderfloor";
-    case 15: return "AutoAdaptRadiatorAndUnderfloor";
-    case 26: return "ProportionalDifferentialPressure";
-    case 254: return "None";
-    default: return "?";
-  }
+  auto *m = control_mode_def(v);
+  return m != nullptr ? m->name : "?";
+}
+static SetpointKind setpoint_kind(uint8_t ctrl) {
+  auto *m = control_mode_def(ctrl);
+  return m != nullptr ? m->kind : SP_UNKNOWN;
 }
 
 void GrundfosAlpha2Go::setup() {
@@ -101,7 +144,9 @@ void GrundfosAlpha2Go::setup() {
   if (this->energy_sensor_ != nullptr) this->wanted_mask_ |= REQ_ENERGY;
   // 86/6 und 86/8 nur zum Vergleich im Log; die Sensoren kommen aus 86/7
   if (this->operation_mode_sensor_ != nullptr || this->control_mode_sensor_ != nullptr ||
-      this->setpoint_sensor_ != nullptr)
+      this->setpoint_sensor_ != nullptr || this->setpoint_head_sensor_ != nullptr ||
+      this->setpoint_flow_sensor_ != nullptr || this->setpoint_actual_sensor_ != nullptr ||
+      this->operation_mode_text_sensor_ != nullptr || this->control_mode_text_sensor_ != nullptr)
     this->wanted_mask_ |= REQ_OP_LOCAL | REQ_OP_PRIO | REQ_OP_REALIZED;
 }
 
@@ -121,6 +166,14 @@ void GrundfosAlpha2Go::publish_(sensor::Sensor *s, float value) {
   if (s != nullptr && std::isfinite(value)) s->publish_state(value);
 }
 
+void GrundfosAlpha2Go::publish_or_nan_(sensor::Sensor *s, float value) {
+  if (s != nullptr) s->publish_state(std::isfinite(value) ? value : NAN);
+}
+
+void GrundfosAlpha2Go::publish_text_(text_sensor::TextSensor *s, const char *value) {
+  if (s != nullptr) s->publish_state(value);
+}
+
 void GrundfosAlpha2Go::publish_all_nan_() {
   sensor::Sensor *all[] = {this->flow_sensor_,
                            this->head_sensor_,
@@ -135,7 +188,10 @@ void GrundfosAlpha2Go::publish_all_nan_() {
                            this->controlbox_temperature_sensor_,
                            this->operation_mode_sensor_,
                            this->control_mode_sensor_,
-                           this->setpoint_sensor_};
+                           this->setpoint_sensor_,
+                           this->setpoint_head_sensor_,
+                           this->setpoint_flow_sensor_,
+                           this->setpoint_actual_sensor_};
   for (auto *s : all)
     if (s != nullptr) s->publish_state(NAN);
 }
@@ -384,10 +440,23 @@ void GrundfosAlpha2Go::handle_reply_(const geni::Reply &r) {
       const float sp = geni::be_float(d + 3);
       ESP_LOGD(TAG, "%s: source=%u mode=%u (%s) control=%u (%s) setpoint=%g", req_name_(req), src, mode,
                operation_mode_name(mode), ctrl, control_mode_name(ctrl), sp);
+      const SetpointKind kind = setpoint_kind(ctrl);
       if (req == REQ_OP_PRIO) {
         this->publish_(this->operation_mode_sensor_, mode);
         this->publish_(this->control_mode_sensor_, ctrl);
         this->publish_(this->setpoint_sensor_, sp);
+        // Sensoren mit fester Einheit; gilt die Einheit fuer die aktuelle Regelart nicht, wird NaN gemeldet
+        this->publish_or_nan_(this->setpoint_head_sensor_, kind == SP_PRESSURE ? sp / PA_PER_M : NAN);
+        this->publish_or_nan_(this->setpoint_flow_sensor_, kind == SP_FLOW ? sp * 3600.0f : NAN);
+        auto *om = operation_mode_def(mode);
+        auto *cm = control_mode_def(ctrl);
+        char buf[24];
+        if (om == nullptr) snprintf(buf, sizeof(buf), "Unbekannt (%u)", mode);
+        this->publish_text_(this->operation_mode_text_sensor_, om != nullptr ? om->text : buf);
+        if (cm == nullptr) snprintf(buf, sizeof(buf), "Unbekannt (%u)", ctrl);
+        this->publish_text_(this->control_mode_text_sensor_, cm != nullptr ? cm->text : buf);
+      } else if (req == REQ_OP_REALIZED) {
+        this->publish_or_nan_(this->setpoint_actual_sensor_, kind == SP_PRESSURE ? sp / PA_PER_M : NAN);
       }
       break;
     }

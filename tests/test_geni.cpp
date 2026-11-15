@@ -112,17 +112,35 @@ int main() {
     assert(fabsf(pw - 22.04f) < 0.01f && pumps == 1 && pump_pw == pw && pump_joule == joule);
   }
 
-  // Typ 303 (OperationStatusRequest): u8 source, u8 mode, u8 control, float setpoint
+  // Typ 303 (OperationStatusRequest), echte 86/7-Frames aus dem Hardware-Log:
+  // u8 source, u8 mode, u8 control, float setpoint (SI: Pa bzw. m3/s)
   {
-    auto op = reply(303, 1, {1, 0, 13, 0x3F, 0x80, 0x00, 0x00});  // Panel, Auto, AutoAdaptRadiator, 1.0
-    Reassembler r;
-    int got = 0;
-    r.feed(op.data(), op.size(), [&](const Reply &rp) {
-      got++;
-      assert(rp.type == TYPE_OPERATION_STATUS && rp.len == 7);
-      assert(rp.data[0] == 1 && rp.data[1] == 0 && rp.data[2] == 13 && be_float(rp.data + 3) == 1.0f);
-    });
-    assert(got == 1);
+    struct Case {
+      std::vector<uint8_t> frame;
+      uint8_t ctrl;
+      float sp;
+    };
+    const Case cases[] = {
+        // Proportionaldruck, Sollwert 24509.8 Pa = 2.50 m
+        {{0x24, 0x12, 0xF8, 0xE7, 0x0A, 0x0E, 0x00, 0x01, 0x2F, 0x01, 0x00, 0x00,
+          0x07, 0x01, 0x00, 0x01, 0x46, 0xBF, 0x7B, 0x9C, 0x64, 0x6D}, 1, 24509.8f},
+        // Konstanter Durchfluss, Sollwert 0.000277778 m3/s = 1.00 m3/h
+        {{0x24, 0x12, 0xF8, 0xE7, 0x0A, 0x0E, 0x00, 0x01, 0x2F, 0x01, 0x00, 0x00,
+          0x07, 0x01, 0x00, 0x08, 0x39, 0x91, 0xA2, 0xB4, 0xCD, 0x98}, 8, 0.000277778f},
+    };
+    for (const auto &c : cases) {
+      Reassembler r;
+      int got = 0;
+      int errs = r.feed(c.frame.data(), c.frame.size(), [&](const Reply &rp) {
+        got++;
+        assert(rp.type == TYPE_OPERATION_STATUS && rp.version == 1 && rp.len == 7);
+        assert(rp.data[0] == 1 && rp.data[1] == 0 && rp.data[2] == c.ctrl);  // Panel, Auto
+        assert(fabsf(be_float(rp.data + 3) - c.sp) / c.sp < 1e-5f);
+      });
+      assert(errs == 0 && got == 1);
+    }
+    assert(fabsf(24509.8f / 9806.65f - 2.4993f) < 1e-3f);   // -> setpoint_head
+    assert(fabsf(0.000277778f * 3600.0f - 1.0f) < 1e-4f);  // -> setpoint_flow
   }
 
   printf("alle Tests OK\n");
