@@ -171,5 +171,22 @@ int main() {
     }
   }
 
+  // Experimenteller SET-Builder: Aufbau, Laengenfeld und CRC (Struktur, keine Referenz der App vorhanden)
+  {
+    const uint8_t on = 1;
+    uint8_t f[MAX_TX_FRAME + 4];
+    size_t n = build_object_set(f, 90, 8, TYPE_AUTONIGHT_ENABLE, 1, &on, 1, true);
+    const uint8_t a[] = {0x27, 0x0F, 0xE7, 0xF8, 0x0A, 0x8B, 0x5A, 0x00, 0x08,
+                         0x00, 0x01, 0x4D, 0x01, 0x00, 0x00, 0x01, 0x01};
+    assert(n == 19 && memcmp(f, a, sizeof(a)) == 0);
+    assert(crc16(f + 1, f[1] + 1) == (uint16_t) ((f[n - 2] << 8) | f[n - 1]));
+    n = build_object_set(f, 90, 8, TYPE_AUTONIGHT_ENABLE, 1, &on, 1, false);
+    const uint8_t b[] = {0x27, 0x08, 0xE7, 0xF8, 0x0A, 0x84, 0x5A, 0x00, 0x08, 0x01};
+    assert(n == 12 && memcmp(f, b, sizeof(b)) == 0);
+    assert(crc16(f + 1, f[1] + 1) == (uint16_t) ((f[n - 2] << 8) | f[n - 1]));
+    uint8_t big[16] = {0};
+    assert(build_object_set(f, 86, 6, 303, 1, big, 7, true) == 0);  // 21 Byte -> zu lang fuer einen BLE-Write
+  }
+
   printf("alle Tests OK\n");
 }

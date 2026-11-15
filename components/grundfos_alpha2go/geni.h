@@ -66,6 +66,40 @@ inline size_t build_object_get(uint8_t *out, uint8_t obj_id, uint16_t sub_id) {
   return finish_frame(out);
 }
 
+// EXPERIMENTELL - Class-10-Objekt schreiben. Format nicht belegt (kein Mitschnitt der App), daher zwei Varianten:
+//   A: 27 LE E7 F8 0A <0x80|n> <ID> <SubHi> <SubLo> 00 <TypHi> <TypLo> <Ver> 00 00 <DatenLen> <Daten> CRC
+//      (Objektkopf wie in den Antworten der Pumpe)
+//   B: 27 LE E7 F8 0A <0x80|n> <ID> <SubHi> <SubLo> <Daten> CRC
+// OS-Bits (obere 2 Bit des APDU-Kopfs): 00 = GET, 10 = SET (GENI-Konvention). Max. 20 Byte pro BLE-Write.
+// Rueckgabe: Framelaenge, 0 wenn zu lang.
+static constexpr size_t MAX_TX_FRAME = 20;
+inline size_t build_object_set(uint8_t *out, uint8_t obj_id, uint16_t sub_id, uint16_t type, uint8_t version,
+                               const uint8_t *data, uint8_t len, bool with_header) {
+  const size_t apdu = 3 + (with_header ? 7 : 0) + len;
+  if (apdu > 0x3F || 6 + apdu + 2 > MAX_TX_FRAME) return 0;
+  out[0] = SD_REQUEST;
+  out[1] = (uint8_t) (4 + apdu);  // DA, SA, Klasse, APDU-Kopf + APDU-Daten
+  out[2] = ADDR_PUMP;
+  out[3] = ADDR_CLIENT;
+  out[4] = CLASS_OBJECT;
+  out[5] = (uint8_t) (0x80 | apdu);
+  size_t i = 6;
+  out[i++] = obj_id;
+  out[i++] = (uint8_t) (sub_id >> 8);
+  out[i++] = (uint8_t) (sub_id & 0xFF);
+  if (with_header) {
+    out[i++] = 0x00;
+    out[i++] = (uint8_t) (type >> 8);
+    out[i++] = (uint8_t) (type & 0xFF);
+    out[i++] = version;
+    out[i++] = 0x00;
+    out[i++] = 0x00;
+    out[i++] = len;
+  }
+  for (uint8_t k = 0; k < len; k++) out[i++] = data[k];
+  return finish_frame(out);
+}
+
 // Class-2-Werte lesen (Erstabfrage der App): 27 LE FF F8 02 <n> <id>... CRC
 inline size_t build_class2_get(uint8_t *out, const uint8_t *ids, uint8_t n, uint8_t da = ADDR_BROADCAST) {
   out[0] = SD_REQUEST;
