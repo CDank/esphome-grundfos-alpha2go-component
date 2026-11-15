@@ -84,7 +84,7 @@ sensor:
       name: "Pumpe Sollwert Drehzahl"
     setpoint_actual:
       name: "Pumpe Zielwert aktuell"
-    # Einstellungen und Status (auf der ALPHA2 GO noch ungetestet)
+    # Einstellungen und Status
     night_setback_enabled:
       name: "Pumpe Nachtabsenkung aktiviert"
     night_mode:

@@ -59,11 +59,11 @@ Messwerte von der Testpumpe (Heizkreis, Dauerbetrieb):
 | `setpoint_speed` | 1/min | 86/7 @3 | 4060 (bei Konstantdrehzahl) |
 | `setpoint_actual` | m | 86/8 @3 (Pa ÷ 9806,65) | 2,09–2,11 (Punkt auf der Kurve) |
 | `setpoint` | SI-Rohwert | 86/7 @3 | 24 509,8 Pa / 0,000278 m³/s |
-| `night_setback_enabled` | binär | 90/8 @0 | ungetestet |
-| `night_mode` | binär | 90/7 @0 (gerade Nachtbetrieb) | ungetestet |
-| `air_detection_enabled` | binär | 88/600 @7 | ungetestet |
-| `air_detections` | Anzahl | 88/604 @1 (Lufterkennungen nach 168 Betriebsstunden) | ungetestet |
-| `venting_active` / `venting_status` | binär / Text | 88/612 @1 (Inaktiv, Manuell aktiv, Automatisch aktiv) | ungetestet |
+| `night_setback_enabled` | binär | 90/8 @0 | aus (wie in der App) |
+| `night_mode` | binär | 90/7 @0 (gerade Nachtbetrieb) | aus |
+| `air_detection_enabled` | binär | 88/600 @7 | an (wie in der App) |
+| `air_detections` | Anzahl | 88/604 @1 (Lufterkennungen nach 168 Betriebsstunden) | 0 |
+| `venting_active` / `venting_status` | binär / Text | 88/612 @1 (Inaktiv, Manuell aktiv, Automatisch aktiv) | aus / „Inaktiv“ |
 
 Die Einstellungen (90/8, 88/600, 88/604) werden nur bei jeder 6. Abfrage gelesen (bei 10 s also etwa jede Minute) und direkt nach dem Verbinden. Nachtbetrieb und Entlüftung werden bei jeder Abfrage gelesen.
 
@@ -167,7 +167,7 @@ Nur @0, @8 und @24 sind als Sensoren verfügbar, die übrigen Felder erscheinen 
 86/6 ist die lokale Anforderung (App/Taste), 86/7 die priorisierte Anforderung nach Bewertung von lokal/remote/Alarm, 86/8 die tatsächlich umgesetzte Anforderung.
 Bei Proportionaldruck enthalten 86/6 und 86/7 den eingestellten Sollwert (24 509,8 Pa = 2,50 m), 86/8 den momentanen Punkt auf der Kurve (≈ 20 500 Pa = 2,09 m, schwankt mit dem Durchfluss). Bei Konstantem Durchfluss sind alle drei gleich.
 
-**Einstellungs-Objekte** (Layout laut Profil, auf der ALPHA2 GO noch nicht geprüft)
+**Einstellungs-Objekte** (an der ALPHA2 GO geprüft; Werte an HK1: 88/600 = 50 / 1000 / 150 / 5 / aktiviert, passend zur App)
 
 | Objekt | Typ | Inhalt |
 |---|---|---|
