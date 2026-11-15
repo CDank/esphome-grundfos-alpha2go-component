@@ -101,6 +101,7 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
   void publish_text_(text_sensor::TextSensor *s, const char *value);
   void publish_bin_(binary_sensor::BinarySensor *s, bool value);
   void publish_venting_();
+  void start_reconnect_backoff_();
   void publish_all_nan_();
 
   Stage stage_{Stage::IDLE};
@@ -110,6 +111,7 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
   bool enc_ok_{false};
   bool auth_failed_{false};      // Verschluesselung in dieser Verbindung abgelehnt
   uint8_t auth_fail_count_{0};   // aufeinanderfolgende Ablehnungen ueber Verbindungen hinweg
+  bool backoff_active_{false};   // ble_client wegen Reconnect-Sperre der Pumpe gerade abgeschaltet
   uint8_t cccd_tries_{0};
   uint8_t hello_sent_{0};
   uint32_t t_stage_{0};
