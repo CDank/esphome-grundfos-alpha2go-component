@@ -255,16 +255,16 @@ button:
 | `switch.pump` | Ein = Betriebsart Auto, Aus = Stopp. Zustand aus 86/6. | Class 3 START (6) / STOP (5) | ✅ |
 | `switch.night_setback` | Nachtabsenkung (AutoNight) ein/aus | SET 90/8 | ✅ |
 | `switch.air_detection` | kontinuierliche Lufterkennung ein/aus. Die übrigen Werte aus 88/600 werden unverändert zurückgeschrieben. | SET 88/600 (25 Byte) | ❌ noch nicht |
-| `select.control_mode` | Prop. Druck, Konstantdruck, beide mit AutoAdapt, Konstanter Förderstrom, Konstantdrehzahl | SET 86/6 | ✅ Prop. Druck, Konstantdruck, Prop. Druck AutoAdapt. Förderstrom und Drehzahl sind noch nicht geprüft. |
+| `select.control_mode` | Prop. Druck, Konstantdruck, beide mit AutoAdapt, Konstanter Förderstrom, Konstantdrehzahl | SET 86/6 | ✅ alle sechs |
 | `number.setpoint_head` | Sollwert in m, nur bei Prop. Druck und Konstantdruck | SET 86/6 | ✅ |
-| `number.setpoint_flow` | Sollwert in m³/h, nur bei Konstantem Förderstrom | SET 86/6 | ❌ noch nicht |
-| `number.setpoint_speed` | Sollwert in 1/min, nur bei Konstantdrehzahl | SET 86/6 | ❌ noch nicht |
+| `number.setpoint_flow` | Sollwert in m³/h, nur bei Konstantem Förderstrom | SET 86/6 | ✅ |
+| `number.setpoint_speed` | Sollwert in 1/min, nur bei Konstantdrehzahl | SET 86/6 | ✅ |
 | `button.venting_start` / `venting_stop` | System-Entlüftung manuell starten / abbrechen | SET 88/612 | ✅ |
 
 Hinweise:
 - **Sollwerte:** Es gilt nur die Zahl, die zur aktiven Regelart passt. Die anderen stehen auf „unbekannt“, und Eingaben dort werden mit einer Warnung im Log verworfen. Bei AutoAdapt bestimmt die Pumpe den Sollwert selbst: `setpoint_head` zeigt ihn an, lässt sich dann aber nicht verstellen.
 - **Grenzen:** Die voreingestellten Grenzen (0,5–6 m, 0,1–3,5 m³/h, 1000–5500 1/min) sind Vorgaben und hängen vom Pumpentyp ab. Mit `min_value`, `max_value` und `step` lassen sie sich anpassen.
-- **Regelartwechsel:** Wechselt die Einheit, wird der zuletzt gelesene Sollwert dieser Einheit mitgeschickt. Gibt es noch keinen, gelten Startwerte: 2 m, 1 m³/h bzw. 3000 1/min. Zwischen Prop. Druck und Konstantdruck bleibt der Sollwert erhalten.
+- **Regelartwechsel:** Wechselt die Einheit, wird der zuletzt gelesene Sollwert dieser Einheit mitgeschickt. Gibt es noch keinen, gelten Startwerte: 2 m, 1 m³/h bzw. 3000 1/min. Zwischen Prop. Druck und Konstantdruck bleibt der Sollwert erhalten. Beim Wechsel aus AutoAdapt heraus wird der eigene, zuletzt gelesene Druck-Sollwert verwendet, nicht der von AutoAdapt.
 - **Abgelehnte Befehle:** Lehnt die Pumpe einen Befehl ab, steht `rejected by pump` mit dem Statuscode im Log. Die Entität springt dann beim Zurücklesen auf den tatsächlichen Zustand.
 - STOP/START und alle SETs ändern die **lokale** Anforderung (86/6), genau wie die GO-App. Die App kann alles danach normal wieder ändern.
 
@@ -286,7 +286,8 @@ Hinweise:
 
 ## Offen
 
-- Noch nicht an der Pumpe geprüft: Schalter Lufterkennung, Sollwert bei Konstantem Förderstrom und Konstantdrehzahl.
+- Noch nicht an der Pumpe geprüft: Schalter Lufterkennung.
+- 86/9 (`temporary_operation_control_obj`) enthält im Ruhezustand Quelle 0, Auto, Konstantdrehzahl, 5225 1/min, also genau die Drehzahl der Pumpenentlüftung. Vermutlich die Vorgabe für „Nur Pumpe entlüften“; noch nicht beschrieben.
 - „Nur Pumpe entlüften“ lässt sich nicht starten. Dafür ist in der App kein Objekt zu finden; die Funktion ist nur als Steuerquelle 111 in 86/8 sichtbar.
 - Ungeprüft: andere Firmware-Stände, andere ALPHA2-GO-Varianten.
 

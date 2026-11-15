@@ -264,7 +264,7 @@ bool GrundfosAlpha2Go::write_control_mode(uint8_t ctrl) {
   }
   const SetpointKind kind = setpoint_kind(ctrl);
   float sp;
-  if (kind == setpoint_kind(this->op_ctrl_)) {
+  if (kind == setpoint_kind(this->op_ctrl_) && !is_autoadapt(this->op_ctrl_)) {
     sp = this->op_sp_;  // gleiche Einheit (z. B. Prop. Druck -> Konstantdruck): Sollwert uebernehmen
   } else if (std::isfinite(this->last_sp_[kind])) {
     sp = this->last_sp_[kind];
@@ -746,7 +746,8 @@ void GrundfosAlpha2Go::handle_reply_(const geni::Reply &r) {
         this->op_mode_ = mode;
         this->op_ctrl_ = ctrl;
         this->op_sp_ = sp;
-        if (kind != SP_UNKNOWN && std::isfinite(sp)) this->last_sp_[kind] = sp;
+        // AutoAdapt-Sollwerte nicht merken: beim Wechsel zurueck soll der eigene Sollwert gelten
+        if (kind != SP_UNKNOWN && std::isfinite(sp) && !is_autoadapt(ctrl)) this->last_sp_[kind] = sp;
         this->publish_controls_();
       } else if (req == REQ_OP_PRIO) {
         this->publish_(this->operation_mode_sensor_, mode);
