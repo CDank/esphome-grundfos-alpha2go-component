@@ -78,7 +78,7 @@ static const RequestDef REQUESTS[] = {
     {1 << 3, 93, 300, "93/300"}, {1 << 4, 87, 1, "87/1"},      {1 << 5, 86, 6, "86/6"},
     {1 << 6, 86, 7, "86/7"},     {1 << 7, 86, 8, "86/8"},      {1 << 8, 90, 8, "90/8"},
     {1 << 9, 90, 7, "90/7"},     {1 << 10, 88, 600, "88/600"}, {1 << 11, 88, 604, "88/604"},
-    {1 << 12, 88, 612, "88/612"},
+    {1 << 12, 88, 612, "88/612"}, {1 << 13, 86, 9, "86/9"},
 };
 
 const char *GrundfosAlpha2Go::req_name_(uint16_t req) {
@@ -357,7 +357,7 @@ void GrundfosAlpha2Go::setup() {
   if (this->air_detection_enabled_binary_sensor_ != nullptr) this->wanted_mask_ |= REQ_AIR_CONFIG;
   if (this->air_detections_sensor_ != nullptr) this->wanted_mask_ |= REQ_AIR_COUNTER;
   if (this->venting_active_binary_sensor_ != nullptr || this->venting_status_text_sensor_ != nullptr)
-    this->wanted_mask_ |= REQ_VENTING | REQ_OP_REALIZED;  // 86/8 fuer "Nur Pumpe entlueften"
+    this->wanted_mask_ |= REQ_VENTING | REQ_OP_REALIZED | REQ_OP_TEMP;  // 86/8, 86/9 fuer "Nur Pumpe entlueften"
   // Bedienelemente
   if (this->pump_switch_ != nullptr || this->control_mode_select_ != nullptr ||
       this->setpoint_head_number_ != nullptr || this->setpoint_flow_number_ != nullptr ||

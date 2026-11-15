@@ -113,17 +113,18 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
     REQ_AIR_CONFIG = 1 << 10,    // 88/600 Lufterkennung konfiguriert
     REQ_AIR_COUNTER = 1 << 11,   // 88/604 Zaehler Lufterkennungen
     REQ_VENTING = 1 << 12,       // 88/612 Entlueftung Status
+    REQ_OP_TEMP = 1 << 13,       // 86/9 temporaere Steuerung (Kandidat fuer "Nur Pumpe entlueften")
   };
   // Rohe Notifications dieser Objekte auf VERBOSE loggen
   static constexpr uint16_t REQ_DIAG_MASK = REQ_ENERGY | REQ_OP_LOCAL | REQ_OP_PRIO | REQ_OP_REALIZED |
                                             REQ_NIGHT_ENABLE | REQ_NIGHT_STATUS | REQ_AIR_CONFIG |
-                                            REQ_AIR_COUNTER | REQ_VENTING;
+                                            REQ_AIR_COUNTER | REQ_VENTING | REQ_OP_TEMP;
   // Einstellungen, die sich selten aendern: nur bei jedem SLOW_EVERY-ten update() (und nach dem Verbinden)
   static constexpr uint16_t REQ_SLOW_MASK = REQ_NIGHT_ENABLE | REQ_AIR_CONFIG | REQ_AIR_COUNTER;
   static constexpr uint8_t SLOW_EVERY = 6;
   // Nach einem Schreibzugriff sofort zuruecklesen
   static constexpr uint16_t REQ_AFTER_WRITE = REQ_OP_LOCAL | REQ_OP_PRIO | REQ_OP_REALIZED | REQ_NIGHT_ENABLE |
-                                              REQ_AIR_CONFIG | REQ_VENTING | REQ_ELECTRIC;
+                                              REQ_AIR_CONFIG | REQ_VENTING | REQ_OP_TEMP | REQ_ELECTRIC;
   static constexpr uint16_t REQ_WRITE = 1u << 15;  // Pseudo-Bit fuer last_req_ (nicht in REQUESTS)
   static const char *req_name_(uint16_t req);
 
