@@ -3,6 +3,7 @@ from esphome.components import ble_client, sensor
 import esphome.config_validation as cv
 from esphome.const import (
     CONF_CURRENT,
+    CONF_ENERGY,
     CONF_FLOW,
     CONF_HEAD,
     CONF_ID,
@@ -10,6 +11,7 @@ from esphome.const import (
     CONF_SPEED,
     CONF_VOLTAGE,
     DEVICE_CLASS_CURRENT,
+    DEVICE_CLASS_ENERGY,
     DEVICE_CLASS_POWER,
     DEVICE_CLASS_TEMPERATURE,
     DEVICE_CLASS_VOLTAGE,
@@ -19,6 +21,7 @@ from esphome.const import (
     UNIT_CELSIUS,
     UNIT_CUBIC_METER_PER_HOUR,
     UNIT_HOUR,
+    UNIT_KILOWATT_HOURS,
     UNIT_METER,
     UNIT_REVOLUTIONS_PER_MINUTE,
     UNIT_VOLT,
@@ -115,6 +118,14 @@ CONFIG_SCHEMA = (
                 state_class=STATE_CLASS_TOTAL_INCREASING,
                 icon="mdi:timer-outline",
             ),
+            # Diagnose: fragt Objekt 87/1 ab und loggt die Rohantwort.
+            # Liefert noch keinen Wert, bis das Feldlayout bekannt ist.
+            cv.Optional(CONF_ENERGY): sensor.sensor_schema(
+                unit_of_measurement=UNIT_KILOWATT_HOURS,
+                accuracy_decimals=2,
+                device_class=DEVICE_CLASS_ENERGY,
+                state_class=STATE_CLASS_TOTAL_INCREASING,
+            ),
         }
     )
     .extend(ble_client.BLE_CLIENT_SCHEMA)
@@ -142,3 +153,4 @@ async def to_code(config):
     await sensors(CONF_STARTS, var.set_starts_sensor)
     await sensors(CONF_OPERATING_HOURS, var.set_operating_hours_sensor)
     await sensors(CONF_POWER_ON_HOURS, var.set_power_on_hours_sensor)
+    await sensors(CONF_ENERGY, var.set_energy_sensor)

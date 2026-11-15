@@ -31,6 +31,7 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
   SUB_SENSOR(starts)
   SUB_SENSOR(operating_hours)
   SUB_SENSOR(power_on_hours)
+  SUB_SENSOR(energy)  // Diagnose: fragt 87/1 ab und loggt die Rohantwort, Feldlayout noch unbekannt
 
  public:
   void setup() override;
@@ -49,7 +50,7 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
     HELLO,       // Erstabfrage der GO-App senden
     POLLING,     // normaler Betrieb
   };
-  enum Request : uint8_t { REQ_ELECTRIC = 1, REQ_FLOW = 2, REQ_COUNTERS = 4, REQ_TEMPERATURE = 8 };
+  enum Request : uint8_t { REQ_ELECTRIC = 1, REQ_FLOW = 2, REQ_COUNTERS = 4, REQ_TEMPERATURE = 8, REQ_ENERGY = 16 };
 
   void reset_state_();
   void write_cccd_();
@@ -69,6 +70,7 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
   uint32_t t_stage_{0};
   uint32_t t_last_tx_{0};
   bool inflight_{false};
+  bool log_raw_rx_{false};  // waehrend die 87/1-Abfrage laeuft: rohe Notifications loggen
   uint8_t wanted_mask_{0};
   uint8_t pending_mask_{0};
   geni::Reassembler rx_;

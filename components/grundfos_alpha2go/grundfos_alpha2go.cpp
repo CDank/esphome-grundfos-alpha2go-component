@@ -35,6 +35,9 @@ void GrundfosAlpha2Go::dump_config() {
   LOG_SENSOR("  ", "Starts", this->starts_sensor_);
   LOG_SENSOR("  ", "Operating hours", this->operating_hours_sensor_);
   LOG_SENSOR("  ", "Power-on hours", this->power_on_hours_sensor_);
+  LOG_SENSOR("  ", "Energy", this->energy_sensor_);
+  if (this->energy_sensor_ != nullptr)
+    ESP_LOGCONFIG(TAG, "  Energy: diagnostic only - requests object 87/1 and logs the raw reply, publishes nothing yet");
 }
 
 void GrundfosAlpha2Go::setup() {
@@ -48,6 +51,7 @@ void GrundfosAlpha2Go::setup() {
   if (this->media_temperature_sensor_ != nullptr || this->pcb_temperature_sensor_ != nullptr ||
       this->controlbox_temperature_sensor_ != nullptr)
     this->wanted_mask_ |= REQ_TEMPERATURE;
+  if (this->energy_sensor_ != nullptr) this->wanted_mask_ |= REQ_ENERGY;
 }
 
 void GrundfosAlpha2Go::reset_state_() {
@@ -57,6 +61,7 @@ void GrundfosAlpha2Go::reset_state_() {
   this->cccd_tries_ = 0;
   this->hello_sent_ = 0;
   this->inflight_ = false;
+  this->log_raw_rx_ = false;
   this->pending_mask_ = 0;
   this->rx_.reset();
 }
@@ -148,6 +153,8 @@ void GrundfosAlpha2Go::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
     case ESP_GATTC_NOTIFY_EVT: {
       if (param->notify.handle != this->data_handle_) break;
       ESP_LOGVV(TAG, "RX %d bytes", (int) param->notify.value_len);
+      if (this->log_raw_rx_)  // auch Antworten, die der Parser verwirft (Fehlerantwort, anderes Format)
+        ESP_LOGD(TAG, "87/1 raw RX: %s", format_hex_pretty(param->notify.value, param->notify.value_len).c_str());
       int crc_errors = this->rx_.feed(param->notify.value, param->notify.value_len,
                                       [this](const geni::Reply &r) { this->handle_reply_(r); });
       if (crc_errors > 0) ESP_LOGW(TAG, "%d GENI frame(s) dropped: CRC error", crc_errors);
@@ -199,6 +206,11 @@ void GrundfosAlpha2Go::send_next_request_() {
   } else if (this->pending_mask_ & REQ_TEMPERATURE) {
     this->pending_mask_ &= ~REQ_TEMPERATURE;
     n = geni::build_object_get(f, 93, 300);
+  } else if (this->pending_mask_ & REQ_ENERGY) {
+    this->pending_mask_ &= ~REQ_ENERGY;
+    n = geni::build_object_get(f, 87, 1);  // power_and_energy (Layout unbekannt)
+    ESP_LOGD(TAG, "87/1 request: %s", format_hex_pretty(f, n).c_str());
+    this->log_raw_rx_ = true;
   } else {
     return;
   }
@@ -236,8 +248,9 @@ void GrundfosAlpha2Go::loop() {
     }
     case Stage::POLLING:
       if (this->inflight_ && now - this->t_last_tx_ > REPLY_TIMEOUT_MS) {
-        ESP_LOGD(TAG, "Reply timeout");
+        ESP_LOGD(TAG, "Reply timeout%s", this->log_raw_rx_ ? " (87/1)" : "");
         this->inflight_ = false;
+        this->log_raw_rx_ = false;
       }
       if (!this->inflight_ && this->pending_mask_ != 0 && now - this->t_last_tx_ >= MIN_TX_GAP_MS)
         this->send_next_request_();
@@ -253,6 +266,7 @@ void GrundfosAlpha2Go::update() {
 
 void GrundfosAlpha2Go::handle_reply_(const geni::Reply &r) {
   this->inflight_ = false;
+  this->log_raw_rx_ = false;
   const uint8_t *d = r.data;
   ESP_LOGV(TAG, "Reply type=%u version=%u len=%u", r.type, r.version, r.len);
   switch (r.type) {
@@ -310,7 +324,9 @@ void GrundfosAlpha2Go::handle_reply_(const geni::Reply &r) {
       }
       break;
     default:
-      ESP_LOGD(TAG, "Unknown reply type %u (version %u, %u bytes) skipped", r.type, r.version, r.len);
+      // Hierher kommt auch die 87/1-Antwort, solange ihr Typ nicht bekannt ist
+      ESP_LOGD(TAG, "Unknown reply type %u (version %u, %u bytes): %s", r.type, r.version, r.len,
+               format_hex_pretty(d, r.len).c_str());
       break;
   }
 }

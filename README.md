@@ -147,7 +147,7 @@ cl /std:c++17 /EHsc /I components\grundfos_alpha2go tests\test_geni.cpp /Fe:t.ex
 
 ## Offen
 
-- **Energiezähler der Pumpe** (kWh, wie in der App): Objekt 87/1 ist noch nicht implementiert, das Feldlayout ist unbekannt. Bis dahin ersetzt ein `integration`-Sensor aus `power` den Zähler (siehe Beispiel-YAML).
+- **Energiezähler der Pumpe** (kWh, wie in der App): Objekt 87/1, Feldlayout unbekannt. Die Option `energy:` ist bisher **nur Diagnose**: Sie fragt 87/1 ab und loggt Anfrage und Rohantwort auf `DEBUG` (`87/1 request`, `87/1 raw RX`, `Unknown reply type …`), liefert aber noch keinen Wert. Bis das Layout geklärt ist, ersetzt ein `integration`-Sensor aus `power` den Zähler (siehe Beispiel-YAML).
 - **Schreiben** (Sollwert, Regelart) ist nicht implementiert; das SET-Format ist nicht belegt.
 - Ungeprüft: Bond nach ESP-Neustart, andere Firmware-Stände, andere ALPHA2-GO-Varianten.
 

@@ -68,6 +68,9 @@ sensor:
       name: "Pumpe Platinentemperatur"
     controlbox_temperature:
       name: "Pumpe Controlbox-Temperatur"
+    # Diagnose: fragt den Energiezaehler (87/1) ab und loggt die Rohantwort, liefert noch keinen Wert
+    # energy:
+    #   name: "Pumpe Energie (Pumpe)"
 
   - platform: integration     # kWh aus der Leistung (Zaehler der Pumpe, Objekt 87/1, noch nicht implementiert)
     name: "Pumpe Energie"
