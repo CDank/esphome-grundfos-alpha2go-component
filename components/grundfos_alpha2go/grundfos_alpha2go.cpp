@@ -55,6 +55,7 @@ void GrundfosAlpha2Go::dump_config() {
 }
 
 static constexpr float PA_PER_M = 9806.65f;  // 1 m Wassersaeule
+static constexpr uint8_t SOURCE_AIR_VENTING = 111;  // ControlSource AirVenting (an HK1 bei "Nur Pumpe entlueften")
 
 // Abfragen in Sende-Reihenfolge
 struct RequestDef {
@@ -166,7 +167,7 @@ void GrundfosAlpha2Go::setup() {
   if (this->air_detection_enabled_binary_sensor_ != nullptr) this->wanted_mask_ |= REQ_AIR_CONFIG;
   if (this->air_detections_sensor_ != nullptr) this->wanted_mask_ |= REQ_AIR_COUNTER;
   if (this->venting_active_binary_sensor_ != nullptr || this->venting_status_text_sensor_ != nullptr)
-    this->wanted_mask_ |= REQ_VENTING;
+    this->wanted_mask_ |= REQ_VENTING | REQ_OP_REALIZED;  // 86/8 fuer "Nur Pumpe entlueften"
 }
 
 void GrundfosAlpha2Go::reset_state_() {
@@ -178,6 +179,8 @@ void GrundfosAlpha2Go::reset_state_() {
   this->inflight_ = false;
   this->last_req_ = 0;
   this->pending_mask_ = 0;
+  this->system_venting_state_ = 0;
+  this->pump_venting_ = false;
   this->rx_.reset();
 }
 
@@ -195,6 +198,28 @@ void GrundfosAlpha2Go::publish_text_(text_sensor::TextSensor *s, const char *val
 
 void GrundfosAlpha2Go::publish_bin_(binary_sensor::BinarySensor *s, bool value) {
   if (s != nullptr) s->publish_state(value);
+}
+
+// Entlueftung: Anlage+Pumpe aus 88/612, Nur-Pumpe aus 86/8 (Steuerquelle AirVenting)
+void GrundfosAlpha2Go::publish_venting_() {
+  const uint8_t sys = this->system_venting_state_;
+  this->publish_bin_(this->venting_active_binary_sensor_, sys != 0 || this->pump_venting_);
+  if (this->venting_status_text_sensor_ == nullptr) return;
+  char buf[32];
+  const char *text;
+  if (sys == 1) {
+    text = "Anlage und Pumpe (manuell)";
+  } else if (sys == 2) {
+    text = "Anlage und Pumpe (automatisch)";
+  } else if (sys != 0) {
+    snprintf(buf, sizeof(buf), "Unbekannt (%u)", sys);
+    text = buf;
+  } else if (this->pump_venting_) {
+    text = "Nur Pumpe";
+  } else {
+    text = "Inaktiv";
+  }
+  this->publish_text_(this->venting_status_text_sensor_, text);
 }
 
 void GrundfosAlpha2Go::publish_all_nan_() {
@@ -274,6 +299,9 @@ void GrundfosAlpha2Go::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
     }
     case ESP_GATTC_WRITE_DESCR_EVT: {
       if (param->write.handle != this->cccd_handle_) break;
+      // ESPHome schreibt den CCCD beim register_for_notify teils selbst -> zweite Bestaetigung ignorieren,
+      // sonst startet die Erstabfrage neu, waehrend schon eine Abfrage laeuft.
+      if (this->stage_ != Stage::WAIT_CCCD) break;
       if (param->write.status == ESP_GATT_OK) {
         ESP_LOGD(TAG, "[%s] Notifications enabled", this->parent_->address_str());
         this->stage_ = Stage::HELLO;
@@ -489,6 +517,9 @@ void GrundfosAlpha2Go::handle_reply_(const geni::Reply &r) {
         this->publish_text_(this->control_mode_text_sensor_, cm != nullptr ? cm->text : buf);
       } else if (req == REQ_OP_REALIZED) {
         this->publish_or_nan_(this->setpoint_actual_sensor_, kind == SP_PRESSURE ? sp / PA_PER_M : NAN);
+        // "Nur Pumpe entlueften" erscheint nicht in 88/612, sondern als Steuerquelle AirVenting (111) in 86/8
+        this->pump_venting_ = (src == SOURCE_AIR_VENTING);
+        this->publish_venting_();
       }
       break;
     }
@@ -515,13 +546,9 @@ void GrundfosAlpha2Go::handle_reply_(const geni::Reply &r) {
       break;
     case geni::TYPE_AIR_VENTING_STATUS: {  // 88/612
       if (r.len < 5) break;
-      const uint8_t state = d[1];
-      ESP_LOGD(TAG, "88/612: cmd=%u state=%u progress=%u algorithm=%u", d[0], state, geni::be_u16(d + 2), d[4]);
-      this->publish_bin_(this->venting_active_binary_sensor_, state != 0);
-      static const char *const states[] = {"Inaktiv", "Manuell aktiv", "Automatisch aktiv"};
-      char buf[24];
-      if (state >= 3) snprintf(buf, sizeof(buf), "Unbekannt (%u)", state);
-      this->publish_text_(this->venting_status_text_sensor_, state < 3 ? states[state] : buf);
+      ESP_LOGD(TAG, "88/612: cmd=%u state=%u progress=%u algorithm=%u", d[0], d[1], geni::be_u16(d + 2), d[4]);
+      this->system_venting_state_ = d[1];
+      this->publish_venting_();
       break;
     }
     default:

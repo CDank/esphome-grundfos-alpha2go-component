@@ -100,6 +100,7 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
   void publish_or_nan_(sensor::Sensor *s, float value);  // NaN wird ebenfalls gesendet (Wert gilt gerade nicht)
   void publish_text_(text_sensor::TextSensor *s, const char *value);
   void publish_bin_(binary_sensor::BinarySensor *s, bool value);
+  void publish_venting_();
   void publish_all_nan_();
 
   Stage stage_{Stage::IDLE};
@@ -116,6 +117,8 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
   uint16_t wanted_mask_{0};
   uint16_t pending_mask_{0};
   uint8_t update_count_{0};
+  uint8_t system_venting_state_{0};  // 88/612: 0 inaktiv, 1 manuell, 2 automatisch
+  bool pump_venting_{false};         // 86/8 Steuerquelle AirVenting
   geni::Reassembler rx_;
 };
 

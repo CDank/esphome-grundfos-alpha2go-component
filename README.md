@@ -63,7 +63,7 @@ Messwerte von der Testpumpe (Heizkreis, Dauerbetrieb):
 | `night_mode` | binär | 90/7 @0 (gerade Nachtbetrieb) | aus |
 | `air_detection_enabled` | binär | 88/600 @7 | an (wie in der App) |
 | `air_detections` | Anzahl | 88/604 @1 (Lufterkennungen nach 168 Betriebsstunden) | 0 |
-| `venting_active` / `venting_status` | binär / Text | 88/612 @1 (Inaktiv, Manuell aktiv, Automatisch aktiv) | aus / „Inaktiv“ |
+| `venting_active` / `venting_status` | binär / Text | 88/612 @1 und 86/8 @0 | „Inaktiv“, „Nur Pumpe“ (an HK1 geprüft), „Anlage und Pumpe (manuell/automatisch)“ |
 
 Die Einstellungen (90/8, 88/600, 88/604) werden nur bei jeder 6. Abfrage gelesen (bei 10 s also etwa jede Minute) und direkt nach dem Verbinden. Nachtbetrieb und Entlüftung werden bei jeder Abfrage gelesen.
 
@@ -176,6 +176,8 @@ Bei Proportionaldruck enthalten 86/6 und 86/7 den eingestellten Sollwert (24 509
 | 88/600 | 600 `AirDetectionConfiguration`, 8 Byte | @0 u16 Drehzahländerung, @2 u16 Druckänderung, @4 u16 Empfindlichkeit, @6 u8 Ignorierzeit nach Start, @7 bool aktiviert |
 | 88/604 | 984 `AirDetectCounterStorage`, 2 Byte | @0 u8 Erkennungen in den ersten 24 Betriebsstunden, @1 u8 nach 168 Betriebsstunden |
 | 88/612 | 971 `SystemAirVentingCommandAndStatus`, 5 Byte | @0 Befehl (0 Stopp, 1 Start manuell), @1 Status (0 inaktiv, 1 manuell, 2 automatisch), @2 u16 Fortschritt, @4 Phase (0 Idle, 1–4 Phase 0–3) |
+
+„Nur Pumpe entlüften“ (10 min) erscheint **nicht** in 88/612, sondern in 86/8 als Steuerquelle 111 (AirVenting) mit Konstantdrehzahl 5225 1/min; 86/6 und 86/7 bleiben unverändert. 88/612 gehört zu „Entlüftung von Anlage und Pumpe“. `venting_active`/`venting_status` werten beides aus.
 
 ## Fehlersuche
 
