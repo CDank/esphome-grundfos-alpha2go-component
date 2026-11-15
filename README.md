@@ -216,9 +216,11 @@ Das Format der Schreibbefehle ist noch nicht an der Pumpe bestätigt. Die Kompon
 
 | Methode | Telegramm | Status |
 |---|---|---|
-| `test_command(5)` / `(6)` / `(7)` / `(8)` | Class 3 STOP / START·AUTO / REMOTE / LOCAL: `27 05 E7 F8 03 81 <Befehl> CRC` (klassisches GENIbus-Format) | ungetestet |
+| `test_command(5)` / `(6)` / `(7)` / `(8)` | Class 3 STOP / START·AUTO / REMOTE / LOCAL: `27 05 E7 F8 03 81 <Befehl> CRC` (klassisches GENIbus-Format) | ✅ STOP und START an HK1 bestätigt (Antwort `24 04 F8 E7 03 00 CRC` = Quittung OK); LOCAL quittiert, ohne sichtbare Wirkung; REMOTE nicht getestet |
 | `test_set_night_setback(true/false, true)` | Class-10-SET 90/8, Variante A (mit Objektkopf) | ungetestet |
 | `test_set_night_setback(true/false, false)` | Class-10-SET 90/8, Variante B (nur Adresse + Daten) | ungetestet |
+
+STOP/START ändern die **lokale** Anforderung (86/6: Betriebsart Stopp/Auto, `control_source` bleibt Panel) – wie eine Änderung in der GO-App; Regelart und Sollwert bleiben erhalten. Die App kann den Zustand danach normal wieder ändern.
 
 `test_command` nimmt nur die Befehle 5–8 an (kein RESET, FACTORY_BOOT o. ä.). Rückgängig machen geht jederzeit in der GO-App (ESP vorher trennen).
 
