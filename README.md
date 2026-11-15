@@ -59,6 +59,13 @@ Messwerte von der Testpumpe (Heizkreis, Dauerbetrieb):
 | `setpoint_speed` | 1/min | 86/7 @3 | 4060 (bei Konstantdrehzahl) |
 | `setpoint_actual` | m | 86/8 @3 (Pa ÷ 9806,65) | 2,09–2,11 (Punkt auf der Kurve) |
 | `setpoint` | SI-Rohwert | 86/7 @3 | 24 509,8 Pa / 0,000278 m³/s |
+| `night_setback_enabled` | binär | 90/8 @0 | ungetestet |
+| `night_mode` | binär | 90/7 @0 (gerade Nachtbetrieb) | ungetestet |
+| `air_detection_enabled` | binär | 88/600 @7 | ungetestet |
+| `air_detections` | Anzahl | 88/604 @1 (Lufterkennungen nach 168 Betriebsstunden) | ungetestet |
+| `venting_active` / `venting_status` | binär / Text | 88/612 @1 (Inaktiv, Manuell aktiv, Automatisch aktiv) | ungetestet |
+
+Die Einstellungen (90/8, 88/600, 88/604) werden nur bei jeder 6. Abfrage gelesen (bei 10 s also etwa jede Minute) und direkt nach dem Verbinden. Nachtbetrieb und Entlüftung werden bei jeder Abfrage gelesen.
 
 `energy` ist der Zähler der Pumpe selbst (wie „Kumulierte Leistungsaufnahme“ in der App), kein aus der Leistung integrierter Wert.
 
@@ -160,9 +167,19 @@ Nur @0, @8 und @24 sind als Sensoren verfügbar, die übrigen Felder erscheinen 
 86/6 ist die lokale Anforderung (App/Taste), 86/7 die priorisierte Anforderung nach Bewertung von lokal/remote/Alarm, 86/8 die tatsächlich umgesetzte Anforderung.
 Bei Proportionaldruck enthalten 86/6 und 86/7 den eingestellten Sollwert (24 509,8 Pa = 2,50 m), 86/8 den momentanen Punkt auf der Kurve (≈ 20 500 Pa = 2,09 m, schwankt mit dem Durchfluss). Bei Konstantem Durchfluss sind alle drei gleich.
 
+**Einstellungs-Objekte** (Layout laut Profil, auf der ALPHA2 GO noch nicht geprüft)
+
+| Objekt | Typ | Inhalt |
+|---|---|---|
+| 90/8 | 333 `AutoNightEnable` | @0 bool: Nachtabsenkung aktiviert |
+| 90/7 | 324 `AutoNightStatus` | @0 bool: gerade Nachtbetrieb |
+| 88/600 | 600 `AirDetectionConfiguration`, 8 Byte | @0 u16 Drehzahländerung, @2 u16 Druckänderung, @4 u16 Empfindlichkeit, @6 u8 Ignorierzeit nach Start, @7 bool aktiviert |
+| 88/604 | 984 `AirDetectCounterStorage`, 2 Byte | @0 u8 Erkennungen in den ersten 24 Betriebsstunden, @1 u8 nach 168 Betriebsstunden |
+| 88/612 | 971 `SystemAirVentingCommandAndStatus`, 5 Byte | @0 Befehl (0 Stopp, 1 Start manuell), @1 Status (0 inaktiv, 1 manuell, 2 automatisch), @2 u16 Fortschritt, @4 Phase (0 Idle, 1–4 Phase 0–3) |
+
 ## Fehlersuche
 
-Mit `logger` auf `VERBOSE` für `grundfos_alpha2go` loggt die Komponente jede Antwort mit Typ, Version und Länge, dazu alle Rohfelder (Floats von 565 und 256, Hex-Dump von 248 und 534, dekodierte Werte von 232). Für 87/1 und 86/6–8 erscheinen zusätzlich die rohen Notifications (`raw RX`), also auch Antworten, die der Parser verwirft. 86/6–8 werden schon auf `DEBUG` dekodiert geloggt, Timeouts mit Objektnummer (`Reply timeout (86/7)`).
+Mit `logger` auf `VERBOSE` für `grundfos_alpha2go` loggt die Komponente jede Antwort mit Typ, Version und Länge, dazu alle Rohfelder (Floats von 565 und 256, Hex-Dump von 248 und 534, dekodierte Werte von 232). Für 87/1, 86/6–8, 90/7–8 und 88/600–612 erscheinen zusätzlich die rohen Notifications (`raw RX`), also auch Antworten, die der Parser verwirft. 86/6–8, 90/7–8 und 88/600–612 werden schon auf `DEBUG` dekodiert geloggt, Timeouts mit Objektnummer (`Reply timeout (90/8)`).
 
 ```yaml
 logger:

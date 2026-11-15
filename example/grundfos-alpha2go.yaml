@@ -84,3 +84,16 @@ sensor:
       name: "Pumpe Sollwert Drehzahl"
     setpoint_actual:
       name: "Pumpe Zielwert aktuell"
+    # Einstellungen und Status (auf der ALPHA2 GO noch ungetestet)
+    night_setback_enabled:
+      name: "Pumpe Nachtabsenkung aktiviert"
+    night_mode:
+      name: "Pumpe Nachtbetrieb"
+    air_detection_enabled:
+      name: "Pumpe Lufterkennung aktiviert"
+    air_detections:
+      name: "Pumpe Lufterkennungen"
+    venting_active:
+      name: "Pumpe Entlüftung aktiv"
+    venting_status:
+      name: "Pumpe Entlüftung Status"

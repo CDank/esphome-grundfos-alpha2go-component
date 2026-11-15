@@ -5,6 +5,7 @@
 #include "esphome/components/esp32_ble_tracker/esp32_ble_tracker.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/text_sensor/text_sensor.h"
+#include "esphome/components/binary_sensor/binary_sensor.h"
 #include "geni.h"
 
 #ifdef USE_ESP32
@@ -42,6 +43,12 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
   SUB_SENSOR(setpoint_actual) // 86/8 momentaner Zielwert in m, nur bei Druck-Regelarten
   SUB_TEXT_SENSOR(operation_mode)  // Klartext zu operation_mode
   SUB_TEXT_SENSOR(control_mode)    // Klartext zu control_mode
+  SUB_SENSOR(air_detections)       // 88/604 Lufterkennungen nach 168 Betriebsstunden
+  SUB_TEXT_SENSOR(venting_status)  // 88/612 Entlueftung: Inaktiv / Manuell / Automatisch
+  SUB_BINARY_SENSOR(night_setback_enabled)  // 90/8 Nachtabsenkung aktiviert
+  SUB_BINARY_SENSOR(night_mode)             // 90/7 gerade Nachtbetrieb
+  SUB_BINARY_SENSOR(air_detection_enabled)  // 88/600 kontinuierliche Lufterkennung aktiviert
+  SUB_BINARY_SENSOR(venting_active)         // 88/612 Entlueftung laeuft
 
  public:
   void setup() override;
@@ -60,18 +67,29 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
     HELLO,       // Erstabfrage der GO-App senden
     POLLING,     // normaler Betrieb
   };
-  enum Request : uint8_t {
-    REQ_ELECTRIC = 1,      // 87/69
-    REQ_FLOW = 2,          // 93/290
-    REQ_COUNTERS = 4,      // 93/1
-    REQ_TEMPERATURE = 8,   // 93/300
-    REQ_ENERGY = 16,       // 87/1
-    REQ_OP_LOCAL = 32,     // 86/6 lokale Anforderung (App/Taste)
-    REQ_OP_PRIO = 64,      // 86/7 priorisierte Anforderung -> Sensoren
-    REQ_OP_REALIZED = 128  // 86/8 umgesetzte Anforderung
+  enum Request : uint16_t {
+    REQ_ELECTRIC = 1 << 0,       // 87/69
+    REQ_FLOW = 1 << 1,           // 93/290
+    REQ_COUNTERS = 1 << 2,       // 93/1
+    REQ_TEMPERATURE = 1 << 3,    // 93/300
+    REQ_ENERGY = 1 << 4,         // 87/1
+    REQ_OP_LOCAL = 1 << 5,       // 86/6 lokale Anforderung (App/Taste)
+    REQ_OP_PRIO = 1 << 6,        // 86/7 priorisierte Anforderung -> Sensoren
+    REQ_OP_REALIZED = 1 << 7,    // 86/8 umgesetzte Anforderung
+    REQ_NIGHT_ENABLE = 1 << 8,   // 90/8 Nachtabsenkung aktiviert
+    REQ_NIGHT_STATUS = 1 << 9,   // 90/7 gerade Nachtbetrieb
+    REQ_AIR_CONFIG = 1 << 10,    // 88/600 Lufterkennung konfiguriert
+    REQ_AIR_COUNTER = 1 << 11,   // 88/604 Zaehler Lufterkennungen
+    REQ_VENTING = 1 << 12,       // 88/612 Entlueftung Status
   };
-  static constexpr uint8_t REQ_DIAG_MASK = REQ_ENERGY | REQ_OP_LOCAL | REQ_OP_PRIO | REQ_OP_REALIZED;
-  static const char *req_name_(uint8_t req);
+  // Neue bzw. noch nicht an der Pumpe gepruefte Objekte: rohe Notifications auf VERBOSE loggen
+  static constexpr uint16_t REQ_DIAG_MASK = REQ_ENERGY | REQ_OP_LOCAL | REQ_OP_PRIO | REQ_OP_REALIZED |
+                                            REQ_NIGHT_ENABLE | REQ_NIGHT_STATUS | REQ_AIR_CONFIG |
+                                            REQ_AIR_COUNTER | REQ_VENTING;
+  // Einstellungen, die sich selten aendern: nur bei jedem SLOW_EVERY-ten update() (und nach dem Verbinden)
+  static constexpr uint16_t REQ_SLOW_MASK = REQ_NIGHT_ENABLE | REQ_AIR_CONFIG | REQ_AIR_COUNTER;
+  static constexpr uint8_t SLOW_EVERY = 6;
+  static const char *req_name_(uint16_t req);
 
   void reset_state_();
   void write_cccd_();
@@ -81,6 +99,7 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
   void publish_(sensor::Sensor *s, float value);
   void publish_or_nan_(sensor::Sensor *s, float value);  // NaN wird ebenfalls gesendet (Wert gilt gerade nicht)
   void publish_text_(text_sensor::TextSensor *s, const char *value);
+  void publish_bin_(binary_sensor::BinarySensor *s, bool value);
   void publish_all_nan_();
 
   Stage stage_{Stage::IDLE};
@@ -93,9 +112,10 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
   uint32_t t_stage_{0};
   uint32_t t_last_tx_{0};
   bool inflight_{false};
-  uint8_t last_req_{0};  // zuletzt gesendete Abfrage (es ist immer nur eine unterwegs)
-  uint8_t wanted_mask_{0};
-  uint8_t pending_mask_{0};
+  uint16_t last_req_{0};  // zuletzt gesendete Abfrage (es ist immer nur eine unterwegs)
+  uint16_t wanted_mask_{0};
+  uint16_t pending_mask_{0};
+  uint8_t update_count_{0};
   geni::Reassembler rx_;
 };
 

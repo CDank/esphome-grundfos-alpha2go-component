@@ -46,23 +46,32 @@ void GrundfosAlpha2Go::dump_config() {
   LOG_SENSOR("  ", "Setpoint actual", this->setpoint_actual_sensor_);
   LOG_TEXT_SENSOR("  ", "Operation mode text", this->operation_mode_text_sensor_);
   LOG_TEXT_SENSOR("  ", "Control mode text", this->control_mode_text_sensor_);
+  LOG_SENSOR("  ", "Air detections", this->air_detections_sensor_);
+  LOG_TEXT_SENSOR("  ", "Venting status", this->venting_status_text_sensor_);
+  LOG_BINARY_SENSOR("  ", "Night setback enabled", this->night_setback_enabled_binary_sensor_);
+  LOG_BINARY_SENSOR("  ", "Night mode", this->night_mode_binary_sensor_);
+  LOG_BINARY_SENSOR("  ", "Air detection enabled", this->air_detection_enabled_binary_sensor_);
+  LOG_BINARY_SENSOR("  ", "Venting active", this->venting_active_binary_sensor_);
 }
 
 static constexpr float PA_PER_M = 9806.65f;  // 1 m Wassersaeule
 
 // Abfragen in Sende-Reihenfolge
 struct RequestDef {
-  uint8_t bit;
+  uint16_t bit;
   uint8_t obj;
   uint16_t sub;
   const char *name;
 };
 static const RequestDef REQUESTS[] = {
-    {1, 87, 69, "87/69"},  {2, 93, 290, "93/290"}, {4, 93, 1, "93/1"},  {8, 93, 300, "93/300"},
-    {16, 87, 1, "87/1"},   {32, 86, 6, "86/6"},    {64, 86, 7, "86/7"}, {128, 86, 8, "86/8"},
+    {1 << 0, 87, 69, "87/69"},   {1 << 1, 93, 290, "93/290"},  {1 << 2, 93, 1, "93/1"},
+    {1 << 3, 93, 300, "93/300"}, {1 << 4, 87, 1, "87/1"},      {1 << 5, 86, 6, "86/6"},
+    {1 << 6, 86, 7, "86/7"},     {1 << 7, 86, 8, "86/8"},      {1 << 8, 90, 8, "90/8"},
+    {1 << 9, 90, 7, "90/7"},     {1 << 10, 88, 600, "88/600"}, {1 << 11, 88, 604, "88/604"},
+    {1 << 12, 88, 612, "88/612"},
 };
 
-const char *GrundfosAlpha2Go::req_name_(uint8_t req) {
+const char *GrundfosAlpha2Go::req_name_(uint16_t req) {
   for (const auto &r : REQUESTS)
     if (r.bit == req) return r.name;
   return "?";
@@ -152,6 +161,12 @@ void GrundfosAlpha2Go::setup() {
       this->setpoint_actual_sensor_ != nullptr ||
       this->operation_mode_text_sensor_ != nullptr || this->control_mode_text_sensor_ != nullptr)
     this->wanted_mask_ |= REQ_OP_LOCAL | REQ_OP_PRIO | REQ_OP_REALIZED;
+  if (this->night_setback_enabled_binary_sensor_ != nullptr) this->wanted_mask_ |= REQ_NIGHT_ENABLE;
+  if (this->night_mode_binary_sensor_ != nullptr) this->wanted_mask_ |= REQ_NIGHT_STATUS;
+  if (this->air_detection_enabled_binary_sensor_ != nullptr) this->wanted_mask_ |= REQ_AIR_CONFIG;
+  if (this->air_detections_sensor_ != nullptr) this->wanted_mask_ |= REQ_AIR_COUNTER;
+  if (this->venting_active_binary_sensor_ != nullptr || this->venting_status_text_sensor_ != nullptr)
+    this->wanted_mask_ |= REQ_VENTING;
 }
 
 void GrundfosAlpha2Go::reset_state_() {
@@ -175,6 +190,10 @@ void GrundfosAlpha2Go::publish_or_nan_(sensor::Sensor *s, float value) {
 }
 
 void GrundfosAlpha2Go::publish_text_(text_sensor::TextSensor *s, const char *value) {
+  if (s != nullptr) s->publish_state(value);
+}
+
+void GrundfosAlpha2Go::publish_bin_(binary_sensor::BinarySensor *s, bool value) {
   if (s != nullptr) s->publish_state(value);
 }
 
@@ -363,11 +382,18 @@ void GrundfosAlpha2Go::loop() {
 }
 
 void GrundfosAlpha2Go::update() {
-  if (this->stage_ == Stage::POLLING) this->pending_mask_ |= this->wanted_mask_;
+  if (this->stage_ != Stage::POLLING) return;
+  uint16_t mask = this->wanted_mask_;
+  if (++this->update_count_ < SLOW_EVERY) {
+    mask &= ~REQ_SLOW_MASK;  // Einstellungen nur jedes SLOW_EVERY-te Mal (nach dem Verbinden immer)
+  } else {
+    this->update_count_ = 0;
+  }
+  this->pending_mask_ |= mask;
 }
 
 void GrundfosAlpha2Go::handle_reply_(const geni::Reply &r) {
-  const uint8_t req = this->inflight_ ? this->last_req_ : 0;  // zu welcher Abfrage die Antwort gehoert
+  const uint16_t req = this->inflight_ ? this->last_req_ : 0;  // zu welcher Abfrage die Antwort gehoert
   this->inflight_ = false;
   const uint8_t *d = r.data;
   ESP_LOGV(TAG, "Reply type=%u version=%u len=%u", r.type, r.version, r.len);
@@ -464,6 +490,38 @@ void GrundfosAlpha2Go::handle_reply_(const geni::Reply &r) {
       } else if (req == REQ_OP_REALIZED) {
         this->publish_or_nan_(this->setpoint_actual_sensor_, kind == SP_PRESSURE ? sp / PA_PER_M : NAN);
       }
+      break;
+    }
+    case geni::TYPE_AUTONIGHT_ENABLE:  // 90/8
+      if (r.len < 1) break;
+      ESP_LOGD(TAG, "90/8: auto_night_enabled=%u", d[0]);
+      this->publish_bin_(this->night_setback_enabled_binary_sensor_, d[0] != 0);
+      break;
+    case geni::TYPE_AUTONIGHT_STATUS:  // 90/7
+      if (r.len < 1) break;
+      ESP_LOGD(TAG, "90/7: is_it_night=%u", d[0]);
+      this->publish_bin_(this->night_mode_binary_sensor_, d[0] != 0);
+      break;
+    case geni::TYPE_AIR_DETECTION_CONFIG:  // 88/600
+      if (r.len < 8) break;
+      ESP_LOGD(TAG, "88/600: speed_change=%u pressure_change=%u sensitivity=%u ignore_start=%u enabled=%u",
+               geni::be_u16(d + 0), geni::be_u16(d + 2), geni::be_u16(d + 4), d[6], d[7]);
+      this->publish_bin_(this->air_detection_enabled_binary_sensor_, d[7] != 0);
+      break;
+    case geni::TYPE_AIR_DETECT_COUNTER:  // 88/604
+      if (r.len < 2) break;
+      ESP_LOGD(TAG, "88/604: detects_first_24h=%u detects_after_168h=%u", d[0], d[1]);
+      this->publish_(this->air_detections_sensor_, d[1]);
+      break;
+    case geni::TYPE_AIR_VENTING_STATUS: {  // 88/612
+      if (r.len < 5) break;
+      const uint8_t state = d[1];
+      ESP_LOGD(TAG, "88/612: cmd=%u state=%u progress=%u algorithm=%u", d[0], state, geni::be_u16(d + 2), d[4]);
+      this->publish_bin_(this->venting_active_binary_sensor_, state != 0);
+      static const char *const states[] = {"Inaktiv", "Manuell aktiv", "Automatisch aktiv"};
+      char buf[24];
+      if (state >= 3) snprintf(buf, sizeof(buf), "Unbekannt (%u)", state);
+      this->publish_text_(this->venting_status_text_sensor_, state < 3 ? states[state] : buf);
       break;
     }
     default:

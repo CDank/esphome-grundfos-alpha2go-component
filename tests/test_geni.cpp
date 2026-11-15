@@ -146,5 +146,30 @@ int main() {
     assert(fabsf(0.000277778f * 3600.0f - 1.0f) < 1e-4f);  // -> setpoint_flow
   }
 
+  // Kurze Antworten (1-8 Byte) der Einstellungs-Objekte: Laengenpruefung im Reassembler (13 + dl + 2 == tot)
+  {
+    const struct {
+      uint16_t type;
+      std::vector<uint8_t> data;
+    } cases[] = {
+        {TYPE_AUTONIGHT_ENABLE, {1}},
+        {TYPE_AUTONIGHT_STATUS, {0}},
+        {TYPE_AIR_DETECTION_CONFIG, {0x00, 0x0A, 0x00, 0x14, 0x00, 0x03, 0x1E, 0x01}},
+        {TYPE_AIR_DETECT_COUNTER, {2, 5}},
+        {TYPE_AIR_VENTING_STATUS, {0, 2, 0x00, 0x32, 3}},
+    };
+    for (const auto &c : cases) {
+      auto f = reply(c.type, 1, c.data);
+      Reassembler r;
+      int got = 0;
+      r.feed(f.data(), f.size(), [&](const Reply &rp) {
+        got++;
+        assert(rp.type == c.type && rp.len == c.data.size());
+        assert(memcmp(rp.data, c.data.data(), c.data.size()) == 0);
+      });
+      assert(got == 1);
+    }
+  }
+
   printf("alle Tests OK\n");
 }

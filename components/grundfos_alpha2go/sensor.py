@@ -1,5 +1,5 @@
 import esphome.codegen as cg
-from esphome.components import ble_client, sensor, text_sensor
+from esphome.components import binary_sensor, ble_client, sensor, text_sensor
 import esphome.config_validation as cv
 from esphome.const import (
     CONF_CURRENT,
@@ -13,6 +13,7 @@ from esphome.const import (
     DEVICE_CLASS_CURRENT,
     DEVICE_CLASS_ENERGY,
     DEVICE_CLASS_POWER,
+    DEVICE_CLASS_RUNNING,
     DEVICE_CLASS_TEMPERATURE,
     DEVICE_CLASS_VOLTAGE,
     ENTITY_CATEGORY_DIAGNOSTIC,
@@ -30,7 +31,7 @@ from esphome.const import (
 )
 
 DEPENDENCIES = ["ble_client"]
-AUTO_LOAD = ["text_sensor"]
+AUTO_LOAD = ["binary_sensor", "text_sensor"]
 
 CONF_DC_VOLTAGE = "dc_voltage"
 CONF_AUX_TEMPERATURE = "aux_temperature"
@@ -49,6 +50,12 @@ CONF_SETPOINT_SPEED = "setpoint_speed"
 CONF_SETPOINT_ACTUAL = "setpoint_actual"
 CONF_OPERATION_MODE_TEXT = "operation_mode_text"
 CONF_CONTROL_MODE_TEXT = "control_mode_text"
+CONF_AIR_DETECTIONS = "air_detections"
+CONF_VENTING_STATUS = "venting_status"
+CONF_NIGHT_SETBACK_ENABLED = "night_setback_enabled"
+CONF_NIGHT_MODE = "night_mode"
+CONF_AIR_DETECTION_ENABLED = "air_detection_enabled"
+CONF_VENTING_ACTIVE = "venting_active"
 
 ns = cg.esphome_ns.namespace("grundfos_alpha2go")
 GrundfosAlpha2Go = ns.class_(
@@ -187,6 +194,31 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_CONTROL_MODE_TEXT): text_sensor.text_sensor_schema(
                 icon="mdi:tune-variant",
             ),
+            # Nachtabsenkung (90/8, 90/7), Lufterkennung (88/600, 88/604), Entlueftung (88/612)
+            cv.Optional(CONF_NIGHT_SETBACK_ENABLED): binary_sensor.binary_sensor_schema(
+                icon="mdi:weather-night",
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_NIGHT_MODE): binary_sensor.binary_sensor_schema(
+                icon="mdi:weather-night",
+            ),
+            cv.Optional(CONF_AIR_DETECTION_ENABLED): binary_sensor.binary_sensor_schema(
+                icon="mdi:air-filter",
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_AIR_DETECTIONS): sensor.sensor_schema(
+                accuracy_decimals=0,
+                icon="mdi:air-filter",
+                state_class=STATE_CLASS_TOTAL_INCREASING,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_VENTING_ACTIVE): binary_sensor.binary_sensor_schema(
+                device_class=DEVICE_CLASS_RUNNING,
+                icon="mdi:fan",
+            ),
+            cv.Optional(CONF_VENTING_STATUS): text_sensor.text_sensor_schema(
+                icon="mdi:fan",
+            ),
         }
     )
     .extend(ble_client.BLE_CLIENT_SCHEMA)
@@ -229,3 +261,18 @@ async def to_code(config):
     if conf := config.get(CONF_CONTROL_MODE_TEXT):
         ts = await text_sensor.new_text_sensor(conf)
         cg.add(var.set_control_mode_text_sensor(ts))
+    if conf := config.get(CONF_VENTING_STATUS):
+        ts = await text_sensor.new_text_sensor(conf)
+        cg.add(var.set_venting_status_text_sensor(ts))
+
+    await sensors(CONF_AIR_DETECTIONS, var.set_air_detections_sensor)
+
+    for key, setter in (
+        (CONF_NIGHT_SETBACK_ENABLED, var.set_night_setback_enabled_binary_sensor),
+        (CONF_NIGHT_MODE, var.set_night_mode_binary_sensor),
+        (CONF_AIR_DETECTION_ENABLED, var.set_air_detection_enabled_binary_sensor),
+        (CONF_VENTING_ACTIVE, var.set_venting_active_binary_sensor),
+    ):
+        if conf := config.get(key):
+            bs = await binary_sensor.new_binary_sensor(conf)
+            cg.add(setter(bs))

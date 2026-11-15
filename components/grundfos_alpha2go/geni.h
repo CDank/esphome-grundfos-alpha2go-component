@@ -26,6 +26,11 @@ static constexpr uint16_t TYPE_OPERATION_HISTORY = 248;   // Obj 93/1   (Zaehler
 // Layouts aus dem GENI-Profil in der GO-App (test_geni_profile_30_4_1.xml), auf der ALPHA2 GO noch nicht geprueft:
 static constexpr uint16_t TYPE_ENERGY = 232;            // Obj 87/1 OverallEnergyConsumption: double@0, float@8, u16@12, [float,double]...
 static constexpr uint16_t TYPE_OPERATION_STATUS = 303;  // Obj 86/6,7,8 OperationStatusRequest: u8 src, u8 mode, u8 ctrl, float@3
+static constexpr uint16_t TYPE_AUTONIGHT_ENABLE = 333;  // Obj 90/8: bool auto_night_enabled
+static constexpr uint16_t TYPE_AUTONIGHT_STATUS = 324;  // Obj 90/7: bool is_it_night
+static constexpr uint16_t TYPE_AIR_DETECTION_CONFIG = 600;  // Obj 88/600: u16,u16,u16,u8, bool enabled@7
+static constexpr uint16_t TYPE_AIR_DETECT_COUNTER = 984;    // Obj 88/604: u8 first 24 h, u8 after 168 h
+static constexpr uint16_t TYPE_AIR_VENTING_STATUS = 971;    // Obj 88/612: u8 cmd, u8 state, u16 progress, u8 algo
 
 // CRC-16 (Poly 0x1021, Init 0xFFFF, Ergebnis invertiert), Big Endian im Frame.
 inline uint16_t crc16(const uint8_t *d, size_t n) {
