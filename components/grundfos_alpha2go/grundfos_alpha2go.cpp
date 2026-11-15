@@ -1,5 +1,6 @@
 #include "grundfos_alpha2go.h"
 #include "esphome/core/log.h"
+#include "esphome/core/helpers.h"
 #include "esphome/core/hal.h"
 #include <cmath>
 
@@ -261,7 +262,9 @@ void GrundfosAlpha2Go::handle_reply_(const geni::Reply &r) {
         this->publish_(this->head_sensor_, geni::be_float(d + 4) * 0.0001f);  // -> m
       }
       if (r.len >= 36) {
-        ESP_LOGV(TAG, "flow_m3h=%.3f head_m=%.3f kv=%.3f (Felder @24/28/32)", geni::be_float(d + 24),
+        ESP_LOGV(TAG, "565: f0=%g f4=%g f8=%g f12=%g f16=%g f20=%g", geni::be_float(d + 0), geni::be_float(d + 4),
+                 geni::be_float(d + 8), geni::be_float(d + 12), geni::be_float(d + 16), geni::be_float(d + 20));
+        ESP_LOGV(TAG, "565: flow_m3h=%.3f head_m=%.3f kv=%.3f (Felder @24/28/32)", geni::be_float(d + 24),
                  geni::be_float(d + 28), geni::be_float(d + 32));
       }
       break;
@@ -274,8 +277,14 @@ void GrundfosAlpha2Go::handle_reply_(const geni::Reply &r) {
         this->publish_(this->speed_sensor_, geni::be_float(d + 20));
       }
       if (r.len >= 36) this->publish_(this->aux_temperature_sensor_, geni::be_float(d + 32));
+      if (r.len >= 36) {
+        ESP_LOGV(TAG, "256: ac=%g dc=%g i=%g p=%g pdc=%g n=%g t24=%g t28=%g t32=%g", geni::be_float(d + 0),
+                 geni::be_float(d + 4), geni::be_float(d + 8), geni::be_float(d + 12), geni::be_float(d + 16),
+                 geni::be_float(d + 20), geni::be_float(d + 24), geni::be_float(d + 28), geni::be_float(d + 32));
+      }
       break;
     case geni::TYPE_OPERATION_HISTORY:  // 93/1, v2, 28 Byte
+      ESP_LOGV(TAG, "248: %s", format_hex_pretty(d, r.len).c_str());
       if (r.len >= 12) {
         if (this->starts_sensor_ != nullptr) this->starts_sensor_->publish_state((float) geni::be_u32(d + 0));
         if (this->operating_hours_sensor_ != nullptr)
@@ -285,6 +294,10 @@ void GrundfosAlpha2Go::handle_reply_(const geni::Reply &r) {
         this->power_on_hours_sensor_->publish_state((float) geni::be_u32(d + 24) / 3600.0f);
       break;
     case geni::TYPE_MEDIA_TEMPERATURE:  // 93/300
+      ESP_LOGV(TAG, "534: %s", format_hex_pretty(d, r.len).c_str());
+      if (r.len >= 12) {
+        ESP_LOGV(TAG, "534: f0=%g f4=%g f8=%g", geni::be_float(d + 0), geni::be_float(d + 4), geni::be_float(d + 8));
+      }
       if (r.len >= 12) {
         this->publish_(this->media_temperature_sensor_, geni::be_float(d + 0));
         this->publish_(this->pcb_temperature_sensor_, geni::be_float(d + 4));
