@@ -10,6 +10,7 @@ from esphome.const import (
     CONF_POWER,
     CONF_SPEED,
     CONF_VOLTAGE,
+    DEVICE_CLASS_CONNECTIVITY,
     DEVICE_CLASS_CURRENT,
     DEVICE_CLASS_ENERGY,
     DEVICE_CLASS_POWER,
@@ -59,6 +60,7 @@ CONF_NIGHT_SETBACK_ENABLED = "night_setback_enabled"
 CONF_NIGHT_MODE = "night_mode"
 CONF_AIR_DETECTION_ENABLED = "air_detection_enabled"
 CONF_VENTING_ACTIVE = "venting_active"
+CONF_CONNECTED = "connected"
 
 
 
@@ -222,6 +224,11 @@ CONFIG_SCHEMA = (
                 state_class=STATE_CLASS_TOTAL_INCREASING,
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
+            # Verbindung zur Pumpe steht und wird abgefragt (Schalter zeigen in HA sonst den letzten Zustand)
+            cv.Optional(CONF_CONNECTED): binary_sensor.binary_sensor_schema(
+                device_class=DEVICE_CLASS_CONNECTIVITY,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
             cv.Optional(CONF_VENTING_ACTIVE): binary_sensor.binary_sensor_schema(
                 device_class=DEVICE_CLASS_RUNNING,
                 icon="mdi:fan",
@@ -282,6 +289,7 @@ async def to_code(config):
         (CONF_NIGHT_MODE, var.set_night_mode_binary_sensor),
         (CONF_AIR_DETECTION_ENABLED, var.set_air_detection_enabled_binary_sensor),
         (CONF_VENTING_ACTIVE, var.set_venting_active_binary_sensor),
+        (CONF_CONNECTED, var.set_connected_binary_sensor),
     ):
         if conf := config.get(key):
             bs = await binary_sensor.new_binary_sensor(conf)

@@ -64,6 +64,7 @@ Messwerte von der Testpumpe (Heizkreis, Dauerbetrieb):
 | `air_detection_enabled` | binär | 88/600 @7 | an (wie in der App) |
 | `air_detections` | Anzahl | 88/604 @1 (Lufterkennungen nach 168 Betriebsstunden) | 0 |
 | `venting_active` / `venting_status` | binär / Text | 88/612 @1 und 86/8 @0 | „Inaktiv“, „Nur Pumpe“ (an HK1 geprüft), „Anlage und Pumpe (manuell/automatisch)“ |
+| `connected` | binär (Verbindung) | – | „Verbunden“, sobald die Verbindung verschlüsselt steht und die Pumpe abgefragt wird; nach einer Trennung „Getrennt“. Nützlich, weil Schalter in Home Assistant nach einer Trennung den letzten Zustand behalten |
 
 Die Einstellungen (90/8, 88/600, 88/604) werden nur bei jeder 6. Abfrage gelesen (bei 10 s also etwa jede Minute) und direkt nach dem Verbinden. Nachtbetrieb und Entlüftung werden bei jeder Abfrage gelesen.
 
@@ -220,7 +221,7 @@ cl /std:c++17 /EHsc /I components\grundfos_alpha2go tests\test_geni.cpp /Fe:t.ex
 
 ## Bedienelemente (Schreibzugriff)
 
-Die Bedienelemente schreiben über dieselbe BLE-Verbindung. Der angezeigte Zustand kommt immer aus der Pumpe: Nach jedem Schreibzugriff liest die Komponente Betriebsstatus, Nachtabsenkung, Lufterkennung und Entlüftung sofort zurück. Änderungen in der GO-App oder an der Pumpe erscheinen spätestens nach dem nächsten Abfragezyklus. Beim Booten schreibt der ESP nichts. Ist die Verbindung zur Pumpe getrennt, meldet die Komponente für alle Entitäten „kein Zustand“: Sensoren, Auswahl und Zahlen stehen dann in Home Assistant auf „unbekannt“. Schalter zeigen weiter den letzten Zustand, weil die ESPHome-Integration von Home Assistant diese Meldung bei Schaltern derzeit nicht auswertet. „Nicht verfügbar“ pro Entität kennt die ESPHome-API nicht.
+Die Bedienelemente schreiben über dieselbe BLE-Verbindung. Der angezeigte Zustand kommt immer aus der Pumpe: Nach jedem Schreibzugriff liest die Komponente Betriebsstatus, Nachtabsenkung, Lufterkennung und Entlüftung sofort zurück. Änderungen in der GO-App oder an der Pumpe erscheinen spätestens nach dem nächsten Abfragezyklus. Beim Booten schreibt der ESP nichts. Ist die Verbindung zur Pumpe getrennt, meldet die Komponente für alle Entitäten „kein Zustand“: Sensoren, Auswahl und Zahlen stehen dann in Home Assistant auf „unbekannt“. Schalter zeigen weiter den letzten Zustand, weil die ESPHome-Integration von Home Assistant diese Meldung bei Schaltern derzeit nicht auswertet; ob sie aktuell sind, zeigt der Binärsensor `connected`. „Nicht verfügbar“ pro Entität kennt die ESPHome-API nicht.
 
 ```yaml
 switch:

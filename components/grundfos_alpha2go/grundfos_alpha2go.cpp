@@ -61,6 +61,7 @@ void GrundfosAlpha2Go::dump_config() {
   LOG_BINARY_SENSOR("  ", "Night mode", this->night_mode_binary_sensor_);
   LOG_BINARY_SENSOR("  ", "Air detection enabled", this->air_detection_enabled_binary_sensor_);
   LOG_BINARY_SENSOR("  ", "Venting active", this->venting_active_binary_sensor_);
+  LOG_BINARY_SENSOR("  ", "Connected", this->connected_binary_sensor_);
   LOG_SWITCH("  ", "Pump", this->pump_switch_);
   LOG_SWITCH("  ", "Night setback", this->night_setback_switch_);
   LOG_SWITCH("  ", "Air detection", this->air_detection_switch_);
@@ -341,6 +342,7 @@ void GrundfosSetpointNumber::control(float value) { this->parent_->write_setpoin
 void GrundfosButton::press_action() { this->parent_->press_button(this->kind_); }
 
 void GrundfosAlpha2Go::setup() {
+  this->publish_bin_(this->connected_binary_sensor_, false);
   if (this->flow_sensor_ != nullptr || this->head_sensor_ != nullptr) this->wanted_mask_ |= REQ_FLOW;
   if (this->power_sensor_ != nullptr || this->voltage_sensor_ != nullptr || this->dc_voltage_sensor_ != nullptr ||
       this->current_sensor_ != nullptr || this->speed_sensor_ != nullptr || this->aux_temperature_sensor_ != nullptr)
@@ -660,6 +662,7 @@ void GrundfosAlpha2Go::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
       this->node_state = espbt::ClientState::IDLE;
       this->reset_state_();
       this->publish_all_unknown_();
+      this->publish_bin_(this->connected_binary_sensor_, false);
       break;
     }
     default:
@@ -767,6 +770,7 @@ void GrundfosAlpha2Go::loop() {
       } else if (this->hello_sent_ >= 2 && now - this->t_last_tx_ >= MIN_TX_GAP_MS) {
         this->stage_ = Stage::POLLING;
         ESP_LOGI(TAG, "[%s] Connected, polling", this->parent_->address_str());
+        this->publish_bin_(this->connected_binary_sensor_, true);
         this->pending_mask_ |= this->wanted_mask_;
       }
       break;

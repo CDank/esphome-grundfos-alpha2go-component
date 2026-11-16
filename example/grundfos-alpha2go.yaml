@@ -97,6 +97,8 @@ sensor:
       name: "Pumpe Entlüftung aktiv"
     venting_status:
       name: "Pumpe Entlüftung Status"
+    connected:
+      name: "Pumpe verbunden"
 
 # Bedienelemente (schreiben auf die Pumpe, Zustand wird immer zurueckgelesen)
 switch:

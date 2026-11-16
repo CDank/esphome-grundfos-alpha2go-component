@@ -62,6 +62,7 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
   SUB_BINARY_SENSOR(night_mode)             // 90/7 gerade Nachtbetrieb
   SUB_BINARY_SENSOR(air_detection_enabled)  // 88/600 kontinuierliche Lufterkennung aktiviert
   SUB_BINARY_SENSOR(venting_active)         // 88/612 Entlueftung laeuft
+  SUB_BINARY_SENSOR(connected)              // Verbindung steht, Pumpe wird abgefragt
 
  public:
   // Bedienelemente (Plattformen switch/select/number/button)
