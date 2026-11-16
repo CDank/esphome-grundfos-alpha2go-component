@@ -539,8 +539,15 @@ void GrundfosAlpha2Go::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
     case ESP_GATTC_SEARCH_CMPL_EVT: {
       auto *chr = this->parent_->get_characteristic(GENI_SERVICE, GENI_CHAR);
       if (chr == nullptr) {
-        ESP_LOGE(TAG, "[%s] GENI characteristic not found - not a Grundfos pump with Bluetooth GENI?",
-                 this->parent_->address_str());
+        // Nach abgelehnter Verschluesselung bzw. Trennung meldet ESPHome die Service-Suche teils noch als
+        // abgeschlossen, ohne Dienste -> dann kein Fehler
+        if (this->stage_ == Stage::IDLE || this->auth_failed_) {
+          ESP_LOGD(TAG, "[%s] Service discovery finished without GENI service (connection not usable)",
+                   this->parent_->address_str());
+        } else {
+          ESP_LOGE(TAG, "[%s] GENI characteristic not found - not a Grundfos pump with Bluetooth GENI?",
+                   this->parent_->address_str());
+        }
         break;
       }
       auto *cccd = chr->get_descriptor(0x2902);
