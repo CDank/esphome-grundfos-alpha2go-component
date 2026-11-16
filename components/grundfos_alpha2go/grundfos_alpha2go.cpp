@@ -1,5 +1,6 @@
 #include "grundfos_alpha2go.h"
 #include "esphome/core/log.h"
+#include "esphome/components/esp32_ble/ble.h"
 #include "esphome/core/helpers.h"
 #include "esphome/core/hal.h"
 #include <algorithm>
@@ -16,6 +17,7 @@ static const char *const TAG = "grundfos_alpha2go";
 static const uint32_t ENC_TIMEOUT_MS = 1500;    // so lange auf AUTH_CMPL warten, danach trotzdem weiter
 static const uint32_t CCCD_TIMEOUT_MS = 2000;
 static const uint32_t REPLY_TIMEOUT_MS = 1000;  // wie die GO-App (GENI_TIMEOUT)
+static const uint32_t STACK_RESET_MIN_GAP_MS = 30000;  // BLE-Stack hoechstens alle 30 s neu starten
 static const uint32_t AUTH_FAIL_DISCONNECT_MS = 5000; // nach abgelehnter Verschluesselung spaetestens dann trennen
 static const uint32_t MIN_TX_GAP_MS = 30;       // Pumpe antwortet nach ca. 80 ms; nur eine Anfrage gleichzeitig
 
@@ -448,22 +450,69 @@ void GrundfosAlpha2Go::publish_all_nan_() {
 }
 
 void GrundfosAlpha2Go::gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) {
-  if (event != ESP_GAP_BLE_AUTH_CMPL_EVT) return;
-  if (memcmp(param->ble_security.auth_cmpl.bd_addr, this->parent_->get_remote_bda(), 6) != 0) return;
-  if (param->ble_security.auth_cmpl.success) {
-    ESP_LOGD(TAG, "[%s] Link encrypted", this->parent_->address_str());
+  const uint8_t *bda = this->parent_->get_remote_bda();
+  switch (event) {
+    case ESP_GAP_BLE_SEC_REQ_EVT:  // Pumpe fordert selbst Sicherheit an
+      if (memcmp(param->ble_security.ble_req.bd_addr, bda, 6) == 0)
+        ESP_LOGD(TAG, "[%s] Security request from pump", this->parent_->address_str());
+      return;
+    case ESP_GAP_BLE_KEY_EVT:  // nur bei einer neuen Kopplung
+      if (memcmp(param->ble_security.ble_key.bd_addr, bda, 6) == 0)
+        ESP_LOGI(TAG, "[%s] New key received from pump (type 0x%02x) - new pairing", this->parent_->address_str(),
+                 param->ble_security.ble_key.key_type);
+      return;
+    case ESP_GAP_BLE_REMOVE_BOND_DEV_COMPLETE_EVT:
+      if (memcmp(param->remove_bond_dev_cmpl.bd_addr, bda, 6) == 0)
+        ESP_LOGW(TAG, "[%s] Bond removed from NVS (status %d)", this->parent_->address_str(),
+                 (int) param->remove_bond_dev_cmpl.status);
+      return;
+    case ESP_GAP_BLE_AUTH_CMPL_EVT:
+      break;
+    default:
+      return;
+  }
+  const auto &ac = param->ble_security.auth_cmpl;
+  if (memcmp(ac.bd_addr, bda, 6) != 0) return;
+  bool stored = false;
+  const uint8_t bonds = this->bond_count_(&stored);
+  if (ac.success) {
+    ESP_LOGD(TAG, "[%s] Link encrypted (key_present=%d key_type=0x%02x auth_mode=0x%02x, bonds in NVS: %u, pump: %s)",
+             this->parent_->address_str(), ac.key_present, ac.key_type, ac.auth_mode, bonds, YESNO(stored));
     this->enc_ok_ = true;
     this->auth_fail_count_ = 0;
-  } else {
-    // Beobachtet an HK1: Direkt nach einer Trennung (ESP oder App) lehnt die Pumpe die Verschluesselung oft mit
-    // reason 82 ab, obwohl der Bond besteht. Ein Druck auf die Bluetooth-Taste behebt das sofort; teils klappt es
-    // ohne Tastendruck nach ca. 1 min Pause (an HK1 geprueft).
-    this->auth_failed_ = true;
-    this->auth_fail_count_++;
-    ESP_LOGW(TAG, "[%s] Encryption rejected (reason=%d, attempt %u). Common right after a disconnect; the ESP retries "
-                  "automatically. Pressing the Bluetooth button on the pump fixes it immediately.",
-             this->parent_->address_str(), param->ble_security.auth_cmpl.fail_reason, this->auth_fail_count_);
+    return;
   }
+  // reason 82 = ESP_AUTH_SMP_PAIR_NOT_SUPPORT: Der ESP hat eine NEUE Kopplung gestartet statt mit dem gespeicherten
+  // LTK zu verschluesseln, und die Pumpe lehnt ab. Bluedroid koppelt neu nur, wenn der Schluessel im RAM fehlt
+  // (btm_ble_set_encryption). Der Bond steht dann noch im NVS: Bluedroid entfernt Geraeteeintraege an mehreren Stellen
+  // nur aus dem RAM (u. a. bta_dm bei Kopplungsfehlern als Central mit
+  // CONFIG_BT_BLE_SMP_REMOVE_BOND_ON_PAIR_FAIL_AS_CENTRAL=y; bei reason 82 bleibt der NVS-Eintrag stehen).
+  // Ab dann scheitert jede Verbindung, bis der Stack neu startet und die Bonds wieder aus dem NVS laedt.
+  this->auth_failed_ = true;
+  this->auth_fail_count_++;
+  const int reason = ac.fail_reason;
+  if (reason == ESP_AUTH_SMP_PAIR_NOT_SUPPORT && stored) {
+    ESP_LOGW(TAG,
+             "[%s] Encryption rejected (reason=82, attempt %u): bond is in NVS, but the BLE stack started a new pairing "
+             "-> restarting the BLE stack to reload the bond",
+             this->parent_->address_str(), this->auth_fail_count_);
+    this->stack_reset_pending_ = true;
+  } else {
+    ESP_LOGW(TAG, "[%s] Encryption rejected (reason=%d, attempt %u, bonds in NVS: %u, pump: %s). %s",
+             this->parent_->address_str(), reason, this->auth_fail_count_, bonds, YESNO(stored),
+             stored ? "" : "Not paired: press the Bluetooth button on the pump while the ESP connects.");
+  }
+}
+
+uint8_t GrundfosAlpha2Go::bond_count_(bool *stored) {
+  *stored = false;
+  int n = esp_ble_get_bond_device_num();
+  if (n <= 0) return 0;
+  std::vector<esp_ble_bond_dev_t> list(n);
+  if (esp_ble_get_bond_device_list(&n, list.data()) != ESP_OK) return 0;
+  for (int i = 0; i < n; i++)
+    if (memcmp(list[i].bd_addr, this->parent_->get_remote_bda(), 6) == 0) *stored = true;
+  return (uint8_t) n;
 }
 
 void GrundfosAlpha2Go::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
@@ -472,6 +521,12 @@ void GrundfosAlpha2Go::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
     case ESP_GATTC_CONNECT_EVT: {
       if (memcmp(param->connect.remote_bda, this->parent_->get_remote_bda(), 6) != 0) return;
       this->reset_state_();
+      {
+        bool stored = false;
+        const uint8_t bonds = this->bond_count_(&stored);
+        ESP_LOGD(TAG, "[%s] Connected, requesting encryption (bonds in NVS: %u, pump: %s)",
+                 this->parent_->address_str(), bonds, YESNO(stored));
+      }
       // Die Pumpe trennt unverschluesselte Clients nach ca. 2 s -> sofort Verschluesselung (gespeicherter Bond).
       esp_err_t r = esp_ble_set_encryption(param->connect.remote_bda, ESP_BLE_SEC_ENCRYPT);
       if (r != ESP_OK) ESP_LOGW(TAG, "esp_ble_set_encryption failed (%d)", (int) r);
@@ -535,6 +590,10 @@ void GrundfosAlpha2Go::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
       break;
     }
     case ESP_GATTC_DISCONNECT_EVT: {
+      if (memcmp(param->disconnect.remote_bda, this->parent_->get_remote_bda(), 6) != 0) break;
+      // reason: 0x08 Supervision Timeout, 0x13 von der Pumpe getrennt, 0x16 vom ESP getrennt, 0x3D MIC-Fehler
+      ESP_LOGI(TAG, "[%s] Disconnected (reason 0x%02x, stage %u, encrypted %s)", this->parent_->address_str(),
+               (unsigned) param->disconnect.reason, (unsigned) this->stage_, YESNO(this->enc_ok_));
       this->node_state = espbt::ClientState::IDLE;
       this->reset_state_();
       this->publish_all_nan_();
@@ -584,6 +643,20 @@ void GrundfosAlpha2Go::send_next_request_() {
 
 void GrundfosAlpha2Go::loop() {
   uint32_t now = millis();
+  if (this->stack_reset_pending_) {
+    this->stack_reset_pending_ = false;
+    if (this->t_last_stack_reset_ != 0 && now - this->t_last_stack_reset_ < STACK_RESET_MIN_GAP_MS) {
+      ESP_LOGD(TAG, "BLE stack restarted %us ago - not again yet", (unsigned) ((now - this->t_last_stack_reset_) / 1000));
+    } else if (esp32_ble::global_ble != nullptr) {
+      // Betrifft alle BLE-Funktionen dieses ESP (Tracker, weitere BLE-Clients); andere Komponenten laufen weiter
+      this->t_last_stack_reset_ = now;
+      ESP_LOGW(TAG, "Restarting BLE stack to reload bonds from NVS");
+      esp32_ble::global_ble->disable();
+      this->set_timeout("ble_reenable", 2000, []() {
+        if (esp32_ble::global_ble != nullptr) esp32_ble::global_ble->enable();
+      });
+    }
+  }
   switch (this->stage_) {
     case Stage::WAIT_ENC:
       // Verschluesselung abgelehnt: unverschluesselt antwortet die Pumpe nicht und trennt gleich -> nichts senden,

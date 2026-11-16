@@ -164,6 +164,9 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
   bool enc_ok_{false};
   bool auth_failed_{false};      // Verschluesselung in dieser Verbindung abgelehnt
   uint8_t auth_fail_count_{0};   // aufeinanderfolgende Ablehnungen ueber Verbindungen hinweg
+  bool stack_reset_pending_{false};  // BLE-Stack neu starten (Bond im NVS, aber nicht mehr im RAM des Stacks)
+  uint32_t t_last_stack_reset_{0};
+  uint8_t bond_count_(bool *stored);  // Anzahl Bonds im NVS; *stored = Bond fuer diese Pumpe vorhanden
   uint8_t cccd_tries_{0};
   uint8_t hello_sent_{0};
   uint32_t t_stage_{0};

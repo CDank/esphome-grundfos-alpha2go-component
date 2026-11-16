@@ -95,7 +95,7 @@ Bei einem Verbindungsabbruch gehen alle Sensoren auf `NaN`.
 
 1. `example/grundfos-alpha2go.yaml` anpassen (`pump_mac`, WLAN).
 2. Flashen. **Beim ersten Verbinden die Bluetooth-Taste an der Pumpe drücken**, sonst `auth fail reason=82`. Der Bond liegt danach im Flash des ESP32 und übersteht Neustarts und OTA-Updates: An der Testpumpe hat sich der ESP nach mehreren OTA-Updates jedes Mal ohne erneuten Tastendruck wieder verbunden.
-   **Ausnahme:** Wird die Verbindung getrennt (ESP oder GO-App) und direkt danach neu aufgebaut, lehnt die Pumpe die Verschlüsselung oft mit `reason=82` ab, obwohl der Bond besteht. Der ESP versucht es automatisch erneut; ein Druck auf die Bluetooth-Taste behebt es sofort. Ohne Tastendruck genügt es, etwa eine Minute zu warten (an HK1 geprüft); kürzere Pausen sind noch nicht getestet.
+   **Wiederverbinden:** Nach einer Trennung kann es passieren, dass der BLE-Stack des ESP den Bond nicht mehr im Arbeitsspeicher hat, obwohl er im Flash steht. Der ESP startet dann eine neue Kopplung, die die Pumpe mit `reason=82` ablehnt, und das wiederholt sich bis zum nächsten Neustart. Die Komponente erkennt das (reason 82, Bond im Flash vorhanden) und startet den BLE-Stack neu (`Restarting BLE stack to reload bonds from NVS`, höchstens alle 30 s). Danach verbindet sie sich ohne Tastendruck. Der Neustart betrifft alle BLE-Funktionen dieses ESP für etwa 2 s, andere Komponenten laufen weiter.
 3. Die GO-App auf dem Handy schließen. Die Pumpe akzeptiert nur einen Client.
 
 Ablauf pro Verbindung: Verschlüsselung → CCCD schreiben → Erstabfrage der App → Abfragen nacheinander (eine gleichzeitig, 30 ms Abstand, 1 s Timeout).
@@ -201,6 +201,8 @@ logger:
     esp32_ble_client: INFO
     ble_client: INFO
 ```
+
+Bei Verbindungsproblemen loggt die Komponente jede Trennung mit Grund (`Disconnected (reason 0x08 …)`: 0x08 Funk-Timeout, 0x13 von der Pumpe getrennt, 0x16 vom ESP getrennt), jede Verschlüsselung mit Schlüsselstatus und die Anzahl der Bonds im Flash. Meldungen des BLE-Stacks selbst erscheinen mit Tags wie `BT_APPL`, `BT_BTC` oder `BT_SMP`; Zeilen wie `remove bond` oder `keep bond after pairing fail` zeigen, wann der Stack einen Bond verwirft.
 
 ## Tests
 
