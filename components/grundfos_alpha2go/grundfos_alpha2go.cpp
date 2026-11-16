@@ -1,6 +1,7 @@
 #include "grundfos_alpha2go.h"
 #include "esphome/core/log.h"
 #include "esphome/components/esp32_ble/ble.h"
+#include <esp_task_wdt.h>
 #include "esphome/core/helpers.h"
 #include "esphome/core/hal.h"
 #include <algorithm>
@@ -18,6 +19,7 @@ static const uint32_t ENC_TIMEOUT_MS = 1500;    // so lange auf AUTH_CMPL warten
 static const uint32_t CCCD_TIMEOUT_MS = 2000;
 static const uint32_t REPLY_TIMEOUT_MS = 1000;  // wie die GO-App (GENI_TIMEOUT)
 static const uint32_t STACK_RESET_MIN_GAP_MS = 30000;  // BLE-Stack hoechstens alle 30 s neu starten
+static const uint32_t BLE_RESET_WDT_MS = 30000;        // Task-Watchdog waehrend des Stack-Neustarts
 static const uint32_t AUTH_FAIL_DISCONNECT_MS = 5000; // nach abgelehnter Verschluesselung spaetestens dann trennen
 static const uint32_t MIN_TX_GAP_MS = 30;       // Pumpe antwortet nach ca. 80 ms; nur eine Anfrage gleichzeitig
 
@@ -648,12 +650,27 @@ void GrundfosAlpha2Go::loop() {
     if (this->t_last_stack_reset_ != 0 && now - this->t_last_stack_reset_ < STACK_RESET_MIN_GAP_MS) {
       ESP_LOGD(TAG, "BLE stack restarted %us ago - not again yet", (unsigned) ((now - this->t_last_stack_reset_) / 1000));
     } else if (esp32_ble::global_ble != nullptr) {
-      // Betrifft alle BLE-Funktionen dieses ESP (Tracker, weitere BLE-Clients); andere Komponenten laufen weiter
+      // Betrifft alle BLE-Funktionen dieses ESP (Tracker, weitere BLE-Clients); andere Komponenten laufen weiter.
+      // Ablauf: erst die Verbindung trennen, dann den Stack abbauen. Der Abbau (esp_bluedroid_disable/deinit,
+      // Controller) blockiert den Haupttask mehrere Sekunden; auf dem ESP32 gilt dafuer der normale Task-Watchdog
+      // (5 s, ESPHome verlaengert ihn nur bei ESP32-Hosted). Deshalb den Watchdog vorher voruebergehend verlaengern.
       this->t_last_stack_reset_ = now;
       ESP_LOGW(TAG, "Restarting BLE stack to reload bonds from NVS");
-      esp32_ble::global_ble->disable();
-      this->set_timeout("ble_reenable", 2000, []() {
+      this->parent_->disconnect();
+      this->set_timeout("ble_disable", 1500, []() {
+        esp_task_wdt_config_t cfg = {.timeout_ms = BLE_RESET_WDT_MS, .idle_core_mask = 0, .trigger_panic = true};
+        esp_task_wdt_reconfigure(&cfg);
+        // Der eigentliche Abbau laeuft danach in esp32_ble::loop() ("esp32_ble took a long time" ist dort normal)
+        if (esp32_ble::global_ble != nullptr) esp32_ble::global_ble->disable();
+      });
+      this->set_timeout("ble_enable", 4000, []() {
         if (esp32_ble::global_ble != nullptr) esp32_ble::global_ble->enable();
+      });
+      this->set_timeout("ble_wdt_restore", 15000, []() {
+        esp_task_wdt_config_t cfg = {.timeout_ms = CONFIG_ESP_TASK_WDT_TIMEOUT_S * 1000u, .idle_core_mask = 0,
+                                     .trigger_panic = true};
+        esp_task_wdt_reconfigure(&cfg);
+        ESP_LOGD(TAG, "Task watchdog restored to %u s", (unsigned) CONFIG_ESP_TASK_WDT_TIMEOUT_S);
       });
     }
   }
