@@ -4,6 +4,7 @@
 #include <esp_task_wdt.h>
 #include "esphome/core/helpers.h"
 #include "esphome/core/hal.h"
+#include "esphome/core/controller_registry.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -430,7 +431,9 @@ void GrundfosAlpha2Go::publish_venting_() {
   this->publish_text_(this->venting_status_text_sensor_, text);
 }
 
-void GrundfosAlpha2Go::publish_all_nan_() {
+// Nach einer Trennung alle Entitaeten auf "unbekannt" setzen (Home Assistant: missing_state). Ein eigenes
+// "nicht verfuegbar" pro Entitaet kennt die ESPHome-API nicht; das gibt es nur, wenn der ganze ESP offline ist.
+void GrundfosAlpha2Go::publish_all_unknown_() {
   sensor::Sensor *all[] = {this->flow_sensor_,
                            this->head_sensor_,
                            this->power_sensor_,
@@ -442,15 +445,64 @@ void GrundfosAlpha2Go::publish_all_nan_() {
                            this->media_temperature_sensor_,
                            this->pcb_temperature_sensor_,
                            this->controlbox_temperature_sensor_,
+                           this->starts_sensor_,
+                           this->operating_hours_sensor_,
+                           this->power_on_hours_sensor_,
+                           this->energy_sensor_,
                            this->operation_mode_sensor_,
                            this->control_mode_sensor_,
                            this->setpoint_sensor_,
                            this->setpoint_head_sensor_,
                            this->setpoint_flow_sensor_,
                            this->setpoint_speed_sensor_,
-                           this->setpoint_actual_sensor_};
+                           this->setpoint_actual_sensor_,
+                           this->air_detections_sensor_};
   for (auto *s : all)
     if (s != nullptr) s->publish_state(NAN);
+
+  binary_sensor::BinarySensor *bins[] = {this->night_setback_enabled_binary_sensor_, this->night_mode_binary_sensor_,
+                                         this->air_detection_enabled_binary_sensor_,
+                                         this->venting_active_binary_sensor_};
+  for (auto *b : bins)
+    if (b != nullptr) b->invalidate_state();
+
+  text_sensor::TextSensor *texts[] = {this->operation_mode_text_sensor_, this->control_mode_text_sensor_,
+                                      this->venting_status_text_sensor_};
+  for (auto *t : texts) {
+    if (t == nullptr || !t->has_state()) continue;
+    t->set_has_state(false);
+#ifdef USE_CONTROLLER_REGISTRY
+    ControllerRegistry::notify_text_sensor_update(t);
+#endif
+  }
+
+  switch_::Switch *switches[] = {this->pump_switch_, this->night_setback_switch_, this->air_detection_switch_};
+  for (auto *sw : switches)
+    if (sw != nullptr) static_cast<GrundfosSwitch *>(sw)->invalidate();
+
+  if (this->control_mode_select_ != nullptr && this->control_mode_select_->has_state()) {
+    this->control_mode_select_->set_has_state(false);
+#ifdef USE_CONTROLLER_REGISTRY
+    ControllerRegistry::notify_select_update(this->control_mode_select_);
+#endif
+  }
+  number::Number *numbers[] = {this->setpoint_head_number_, this->setpoint_flow_number_, this->setpoint_speed_number_};
+  for (auto *n : numbers) {
+    if (n == nullptr || !n->has_state()) continue;
+    n->set_has_state(false);
+#ifdef USE_CONTROLLER_REGISTRY
+    ControllerRegistry::notify_number_update(n);
+#endif
+  }
+}
+
+void GrundfosSwitch::invalidate() {
+  if (!this->has_state()) return;
+  this->publish_dedup_.next_unknown();  // sonst wuerde derselbe Zustand nach dem Wiederverbinden verworfen
+  this->set_has_state(false);
+#ifdef USE_CONTROLLER_REGISTRY
+  ControllerRegistry::notify_switch_update(this);
+#endif
 }
 
 void GrundfosAlpha2Go::gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) {
@@ -607,7 +659,7 @@ void GrundfosAlpha2Go::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
                (unsigned) param->disconnect.reason, (unsigned) this->stage_, YESNO(this->enc_ok_));
       this->node_state = espbt::ClientState::IDLE;
       this->reset_state_();
-      this->publish_all_nan_();
+      this->publish_all_unknown_();
       break;
     }
     default:

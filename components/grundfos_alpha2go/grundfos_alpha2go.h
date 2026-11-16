@@ -140,7 +140,7 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
   void publish_bin_(binary_sensor::BinarySensor *s, bool value);
   void publish_venting_();
   void publish_controls_();  // Bedienelemente aus 86/6 aktualisieren
-  void publish_all_nan_();
+  void publish_all_unknown_();  // nach Trennung: alle Entitaeten auf "unbekannt"
 
   // Schreib-Warteschlange: Frames warten, bis keine Abfrage unterwegs ist
   struct PendingWrite {
@@ -202,6 +202,7 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
 class GrundfosSwitch : public switch_::Switch, public Parented<GrundfosAlpha2Go> {
  public:
   void set_kind(SwitchKind kind) { this->kind_ = kind; }
+  void invalidate();  // Zustand "unbekannt"; der naechste publish_state() geht sicher durch
 
  protected:
   void write_state(bool state) override;

@@ -220,7 +220,7 @@ cl /std:c++17 /EHsc /I components\grundfos_alpha2go tests\test_geni.cpp /Fe:t.ex
 
 ## Bedienelemente (Schreibzugriff)
 
-Die Bedienelemente schreiben über dieselbe BLE-Verbindung. Der angezeigte Zustand kommt immer aus der Pumpe: Nach jedem Schreibzugriff liest die Komponente Betriebsstatus, Nachtabsenkung, Lufterkennung und Entlüftung sofort zurück. Änderungen in der GO-App oder an der Pumpe erscheinen spätestens nach dem nächsten Abfragezyklus. Beim Booten schreibt der ESP nichts.
+Die Bedienelemente schreiben über dieselbe BLE-Verbindung. Der angezeigte Zustand kommt immer aus der Pumpe: Nach jedem Schreibzugriff liest die Komponente Betriebsstatus, Nachtabsenkung, Lufterkennung und Entlüftung sofort zurück. Änderungen in der GO-App oder an der Pumpe erscheinen spätestens nach dem nächsten Abfragezyklus. Beim Booten schreibt der ESP nichts. Ist die Verbindung zur Pumpe getrennt, stehen alle Entitäten der Komponente (Sensoren, Schalter, Auswahl, Zahlen) auf „unbekannt“; „nicht verfügbar“ pro Entität kennt die ESPHome-API nicht.
 
 ```yaml
 switch:
