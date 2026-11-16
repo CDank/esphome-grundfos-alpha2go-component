@@ -23,6 +23,8 @@ static const uint32_t BLE_RESET_WDT_MS = 30000;        // Task-Watchdog waehrend
 static const uint32_t AUTH_FAIL_DISCONNECT_MS = 5000; // nach abgelehnter Verschluesselung spaetestens dann trennen
 static const uint32_t MIN_TX_GAP_MS = 30;       // Pumpe antwortet nach ca. 80 ms; nur eine Anfrage gleichzeitig
 
+uint32_t GrundfosAlpha2Go::t_last_stack_reset_ = 0;
+
 static const espbt::ESPBTUUID GENI_SERVICE = espbt::ESPBTUUID::from_uint16(0xFE5D);
 static const espbt::ESPBTUUID GENI_CHAR = espbt::ESPBTUUID::from_raw("859cffd1-036e-432a-aa28-1a0085b87ba9");
 
