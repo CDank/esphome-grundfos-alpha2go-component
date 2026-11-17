@@ -36,6 +36,7 @@ sensor:
   - platform: grundfos_alpha2go
     id: pump
     ble_client_id: pump_ble
+    language: en                # texts and select options in English (default: de)
     update_interval: 10s
     flow:
       name: "Pump flow"

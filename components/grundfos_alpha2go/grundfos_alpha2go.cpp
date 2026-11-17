@@ -99,16 +99,23 @@ const char *GrundfosAlpha2Go::req_name_(uint16_t req) {
 // Betriebsart (Enum OperationMode im GENI-Profil): Name fuer das Log, Klartext fuer HA
 struct OperationModeDef {
   const char *name;
-  const char *text;
+  const char *text;     // deutsch
+  const char *text_en;  // englisch
 };
 static const OperationModeDef OPERATION_MODES[] = {
-    {"Auto", "Auto"},           {"Stop", "Stopp"},
-    {"Min", "Minimum"},         {"Max", "Maximum"},
-    {"UserDefined", "Benutzerdefiniert"},       {"ForcedStart", "Zwangsstart"},
-    {"NoCmd", "Kein Befehl"},   {"Hand", "Hand"},
-    {"Standby", "Standby"},     {"StopWithoutDelay", "Stopp sofort"},
-    {"EmergencyRun", "Notbetrieb"},             {"UserDefined2", "Benutzerdefiniert 2"},
-    {"SetPumpsToLocalMode", "Lokalbetrieb"},
+    {"Auto", "Auto", "Auto"},
+    {"Stop", "Stopp", "Stop"},
+    {"Min", "Minimum", "Minimum"},
+    {"Max", "Maximum", "Maximum"},
+    {"UserDefined", "Benutzerdefiniert", "User defined"},
+    {"ForcedStart", "Zwangsstart", "Forced start"},
+    {"NoCmd", "Kein Befehl", "No command"},
+    {"Hand", "Hand", "Hand"},
+    {"Standby", "Standby", "Standby"},
+    {"StopWithoutDelay", "Stopp sofort", "Stop immediately"},
+    {"EmergencyRun", "Notbetrieb", "Emergency run"},
+    {"UserDefined2", "Benutzerdefiniert 2", "User defined 2"},
+    {"SetPumpsToLocalMode", "Lokalbetrieb", "Local mode"},
 };
 static const OperationModeDef *operation_mode_def(uint8_t v) {
   return v < sizeof(OPERATION_MODES) / sizeof(OPERATION_MODES[0]) ? &OPERATION_MODES[v] : nullptr;
@@ -122,29 +129,30 @@ static const char *operation_mode_name(uint8_t v) {
 struct ControlModeDef {
   uint8_t code;
   const char *name;
-  const char *text;
+  const char *text;     // deutsch
+  const char *text_en;  // englisch
   SetpointKind kind;
 };
 // Klartexte an die Begriffe der GO-App angelehnt ("Prop. Druck", "Foerderstrom"). In der App wird AutoAdapt
 // innerhalb von Prop. Druck bzw. Konstantdruck aktiviert; die Pumpe meldet das als 13 bzw. 14 (an HK1 geprueft).
 static const ControlModeDef CONTROL_MODES[] = {
-    {0, "ConstantPressure", "Konstantdruck", SP_PRESSURE},  // Pa an HK1 verifiziert (Schreibtest)
-    {1, "ProportionalPressure", "Prop. Druck", SP_PRESSURE},  // Pa an HK1 verifiziert
-    {2, "ConstantSpeed", "Konstantdrehzahl", SP_SPEED},       // 1/min an HK1 verifiziert
-    {5, "AutoAdapt", "AutoAdapt", SP_PRESSURE},
-    {6, "ConstantTemperature", "Konstanttemperatur", SP_UNKNOWN},
-    {7, "ClosedLoopSensor", "Sensorregelung", SP_UNKNOWN},
-    {8, "ConstantFlow", "Konstanter Förderstrom", SP_FLOW},  // m3/s an HK1 verifiziert
-    {9, "ConstantLevel", "Konstantes Niveau", SP_UNKNOWN},
-    {10, "FlowAdapt", "FlowAdapt", SP_FLOW},
-    {11, "ConstantDifferentialPressure", "Konstanter Differenzdruck", SP_PRESSURE},
-    {12, "ConstantDifferentialTemperature", "Konstante Differenztemperatur", SP_UNKNOWN},
-    {13, "AutoAdaptRadiator", "Prop. Druck (AutoAdapt)", SP_PRESSURE},    // Pa an HK1 verifiziert
-    {14, "AutoAdaptUnderfloor", "Konstantdruck (AutoAdapt)", SP_PRESSURE},  // Pa an HK1 verifiziert
-    {15, "AutoAdaptRadiatorAndUnderfloor", "AutoAdapt Heizkörper + Fußboden", SP_PRESSURE},
-    {24, "UserDefined", "Benutzerdefiniert", SP_UNKNOWN},
-    {26, "ProportionalDifferentialPressure", "Proportionaler Differenzdruck", SP_PRESSURE},
-    {254, "None", "Keine", SP_UNKNOWN},
+    {0, "ConstantPressure", "Konstantdruck", "Constant pressure", SP_PRESSURE},  // Pa an HK1 verifiziert (Schreibtest)
+    {1, "ProportionalPressure", "Prop. Druck", "Proportional pressure", SP_PRESSURE},  // Pa an HK1 verifiziert
+    {2, "ConstantSpeed", "Konstantdrehzahl", "Constant speed", SP_SPEED},       // 1/min an HK1 verifiziert
+    {5, "AutoAdapt", "AutoAdapt", "AutoAdapt", SP_PRESSURE},
+    {6, "ConstantTemperature", "Konstanttemperatur", "Constant temperature", SP_UNKNOWN},
+    {7, "ClosedLoopSensor", "Sensorregelung", "Closed loop sensor", SP_UNKNOWN},
+    {8, "ConstantFlow", "Konstanter Förderstrom", "Constant flow", SP_FLOW},  // m3/s an HK1 verifiziert
+    {9, "ConstantLevel", "Konstantes Niveau", "Constant level", SP_UNKNOWN},
+    {10, "FlowAdapt", "FlowAdapt", "FlowAdapt", SP_FLOW},
+    {11, "ConstantDifferentialPressure", "Konstanter Differenzdruck", "Constant differential pressure", SP_PRESSURE},
+    {12, "ConstantDifferentialTemperature", "Konstante Differenztemperatur", "Constant differential temperature", SP_UNKNOWN},
+    {13, "AutoAdaptRadiator", "Prop. Druck (AutoAdapt)", "Proportional pressure (AutoAdapt)", SP_PRESSURE},    // Pa an HK1 verifiziert
+    {14, "AutoAdaptUnderfloor", "Konstantdruck (AutoAdapt)", "Constant pressure (AutoAdapt)", SP_PRESSURE},  // Pa an HK1 verifiziert
+    {15, "AutoAdaptRadiatorAndUnderfloor", "AutoAdapt Heizkörper + Fußboden", "AutoAdapt radiator + underfloor", SP_PRESSURE},
+    {24, "UserDefined", "Benutzerdefiniert", "User defined", SP_UNKNOWN},
+    {26, "ProportionalDifferentialPressure", "Proportionaler Differenzdruck", "Proportional differential pressure", SP_PRESSURE},
+    {254, "None", "Keine", "None", SP_UNKNOWN},
 };
 static const ControlModeDef *control_mode_def(uint8_t v) {
   for (const auto &m : CONTROL_MODES)
@@ -416,19 +424,20 @@ void GrundfosAlpha2Go::publish_venting_() {
   const uint8_t sys = this->system_venting_state_;
   this->publish_bin_(this->venting_active_binary_sensor_, sys != 0 || this->pump_venting_);
   if (this->venting_status_text_sensor_ == nullptr) return;
+  const bool en = this->english_;
   char buf[32];
   const char *text;
   if (sys == 1) {
-    text = "Anlage und Pumpe (manuell)";
+    text = en ? "System and pump (manual)" : "Anlage und Pumpe (manuell)";
   } else if (sys == 2) {
-    text = "Anlage und Pumpe (automatisch)";
+    text = en ? "System and pump (automatic)" : "Anlage und Pumpe (automatisch)";
   } else if (sys != 0) {
-    snprintf(buf, sizeof(buf), "Unbekannt (%u)", sys);
+    snprintf(buf, sizeof(buf), en ? "Unknown (%u)" : "Unbekannt (%u)", sys);
     text = buf;
   } else if (this->pump_venting_) {
-    text = "Nur Pumpe";
+    text = en ? "Pump only" : "Nur Pumpe";
   } else {
-    text = "Inaktiv";
+    text = en ? "Inactive" : "Inaktiv";
   }
   this->publish_text_(this->venting_status_text_sensor_, text);
 }
@@ -914,11 +923,13 @@ void GrundfosAlpha2Go::handle_reply_(const geni::Reply &r) {
         this->publish_or_nan_(this->setpoint_speed_sensor_, kind == SP_SPEED ? sp : NAN);
         auto *om = operation_mode_def(mode);
         auto *cm = control_mode_def(ctrl);
+        const bool en = this->english_;
+        const char *unknown_fmt = en ? "Unknown (%u)" : "Unbekannt (%u)";
         char buf[24];
-        if (om == nullptr) snprintf(buf, sizeof(buf), "Unbekannt (%u)", mode);
-        this->publish_text_(this->operation_mode_text_sensor_, om != nullptr ? om->text : buf);
-        if (cm == nullptr) snprintf(buf, sizeof(buf), "Unbekannt (%u)", ctrl);
-        this->publish_text_(this->control_mode_text_sensor_, cm != nullptr ? cm->text : buf);
+        if (om == nullptr) snprintf(buf, sizeof(buf), unknown_fmt, mode);
+        this->publish_text_(this->operation_mode_text_sensor_, om != nullptr ? (en ? om->text_en : om->text) : buf);
+        if (cm == nullptr) snprintf(buf, sizeof(buf), unknown_fmt, ctrl);
+        this->publish_text_(this->control_mode_text_sensor_, cm != nullptr ? (en ? cm->text_en : cm->text) : buf);
       } else if (req == REQ_OP_REALIZED) {
         this->publish_or_nan_(this->setpoint_actual_sensor_, kind == SP_PRESSURE ? sp / PA_PER_M : NAN);
         // "Nur Pumpe entlueften" erscheint nicht in 88/612, sondern als Steuerquelle AirVenting (111) in 86/8

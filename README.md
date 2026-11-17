@@ -25,6 +25,7 @@ sensor:
   - platform: grundfos_alpha2go
     id: pump
     ble_client_id: pump_ble
+    language: en                       # texts in English (default: de)
     flow: {name: "Pump flow"}
     head: {name: "Pump head"}
     power: {name: "Pump power"}
@@ -77,7 +78,7 @@ In AutoAdapt modes the pump picks the setpoint itself, and `setpoint_actual` sho
 
 `operation_mode` codes: 0 Auto, 1 Stop, 2 Min, 3 Max, 4 User defined, 7 Hand, 8 Standby.
 `control_mode` codes: 0 constant pressure, 1 proportional pressure, 2 constant speed, 8 constant flow, 13 proportional pressure (AutoAdapt), 14 constant pressure (AutoAdapt).
-The `_text` sensors and the control mode select use the German terms of the GO app.
+**Language:** `language: en` in the sensor block switches the `_text` sensors, `venting_status` and the control mode select to English (default `de`). Home Assistant's own language can't be used: the ESPHome API doesn't tell the device which language HA runs in, and HA doesn't translate ESPHome text states.
 
 ## Controls
 

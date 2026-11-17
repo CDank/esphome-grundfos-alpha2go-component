@@ -61,6 +61,8 @@ CONF_NIGHT_MODE = "night_mode"
 CONF_AIR_DETECTION_ENABLED = "air_detection_enabled"
 CONF_VENTING_ACTIVE = "venting_active"
 CONF_CONNECTED = "connected"
+CONF_LANGUAGE = "language"
+LANGUAGES = ["de", "en"]
 
 
 
@@ -78,6 +80,8 @@ CONFIG_SCHEMA = (
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(GrundfosAlpha2Go),
+            # Sprache der Texte (Textsensoren und Auswahl der Regelart)
+            cv.Optional(CONF_LANGUAGE, default="de"): cv.one_of(*LANGUAGES, lower=True),
             cv.Optional(CONF_FLOW): sensor.sensor_schema(
                 unit_of_measurement=UNIT_CUBIC_METER_PER_HOUR,
                 accuracy_decimals=2,
@@ -245,6 +249,8 @@ CONFIG_SCHEMA = (
 
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
+    if config[CONF_LANGUAGE] == "en":
+        cg.add(var.set_english(True))
     await cg.register_component(var, config)
     await ble_client.register_ble_node(var, config)
 

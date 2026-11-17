@@ -78,6 +78,8 @@ Bei AutoAdapt bestimmt die Pumpe den Sollwert selbst, `setpoint_actual` zeigt da
 Codes für `operation_mode`: 0 Auto, 1 Stopp, 2 Min, 3 Max, 4 Benutzerdefiniert, 7 Hand, 8 Standby.
 Codes für `control_mode`: 0 Konstantdruck, 1 Prop. Druck, 2 Konstantdrehzahl, 8 Konstanter Förderstrom, 13 Prop. Druck (AutoAdapt), 14 Konstantdruck (AutoAdapt).
 
+**Sprache:** Die `_text`-Sensoren, `venting_status` und die Auswahl der Regelart sind standardmäßig deutsch, angelehnt an die GO-App. `language: en` im sensor-Block schaltet sie auf Englisch. Die Sprache von Home Assistant lässt sich nicht übernehmen: Die ESPHome-API teilt dem Gerät die HA-Sprache nicht mit, und HA übersetzt Textzustände von ESPHome nicht.
+
 ## Bedienelemente
 
 ```yaml

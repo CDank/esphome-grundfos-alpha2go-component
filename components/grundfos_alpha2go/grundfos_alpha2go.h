@@ -65,6 +65,7 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
   SUB_BINARY_SENSOR(connected)              // Verbindung steht, Pumpe wird abgefragt
 
  public:
+  void set_english(bool english) { this->english_ = english; }
   // Bedienelemente (Plattformen switch/select/number/button)
   void set_pump_switch(switch_::Switch *s) { this->pump_switch_ = s; }
   void set_night_setback_switch(switch_::Switch *s) { this->night_setback_switch_ = s; }
@@ -141,6 +142,7 @@ class GrundfosAlpha2Go : public ble_client::BLEClientNode, public PollingCompone
   void publish_bin_(binary_sensor::BinarySensor *s, bool value);
   void publish_venting_();
   void publish_controls_();  // Bedienelemente aus 86/6 aktualisieren
+  bool english_{false};  // Sprache der Texte (Textsensoren); Auswahl-Optionen setzt select.py
   void publish_all_unknown_();  // nach Trennung: alle Entitaeten auf "unbekannt"
 
   // Schreib-Warteschlange: Frames warten, bis keine Abfrage unterwegs ist
