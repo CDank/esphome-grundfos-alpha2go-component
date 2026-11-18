@@ -5,7 +5,7 @@
 External ESPHome component `grundfos_alpha2go` that reads and controls a Grundfos **ALPHA2 GO** circulator pump over Bluetooth LE, no Grundfos app needed.
 ESPHome's built-in `alpha3` component does not work with the ALPHA2 GO: it polls an object for flow and head that only the original ALPHA3 has.
 
-**Status:** Tested with an ALPHA2 GO 25-60 180, reading and writing. Builds with ESPHome 2026.10.2 (ESP-IDF and Arduino).
+**Status:** Tested reading and writing with an ALPHA2 GO 25-60 180. Three pumps (2× ALPHA2 GO 25-60 180, 1× ALPHA2 GO 25-40 180) run at the same time on one ESP32. Builds with ESPHome 2026.10.2 (ESP-IDF and Arduino).
 The protocol was derived from the Grundfos GO app and the capture in `Lasse-source/esphome-grundfos-alpha2-go`.
 
 ## Quick start
@@ -38,7 +38,7 @@ A full example with every entity is in [`example/grundfos-alpha2go.yaml`](exampl
 1. Flash the ESP. **Press the Bluetooth button on the pump while the ESP connects for the first time**, otherwise the pump rejects it (`reason=82`). The bond is stored in the ESP's flash and survives reboots and OTA updates.
 2. Close the Grundfos GO app on your phone. The pump accepts only one client at a time.
 
-Several pumps: add one `ble_client` and one `grundfos_alpha2go` block per pump and pair each pump with its Bluetooth button.
+Several pumps: add one `ble_client` and one `grundfos_alpha2go` block per pump and pair each pump with its Bluetooth button. Three pumps on one ESP32 are tested; ESPHome allows 3 BLE connections by default, more need `esp32_ble: max_connections:` (ESP-IDF, up to 9).
 
 > **Note:** Binary sensors and text sensors of this component (`connected`, `night_mode`, `venting_status` …) go into the same `sensor:` block as the numeric sensors, not under `binary_sensor:` or `text_sensor:`.
 
@@ -116,7 +116,7 @@ button:
 | `venting_start` / `venting_stop` | Start or stop the system venting manually |
 
 - The displayed state always comes from the pump: after each write the component reads it back. Changes made in the app or on the pump show up with the next poll. The ESP writes nothing at boot.
-- Default limits are 0.5–6 m, 0.1–3.5 m³/h and 1000–5500 rpm. Change them with `min_value`, `max_value` and `step`.
+- Default limits are 0.5–6 m, 0.1–3.5 m³/h and 1000–5500 rpm. Change them with `min_value`, `max_value` and `step`, e.g. `max_value: 4` for a 25-40.
 - When the control mode changes unit, the last known setpoint for that unit is sent along, or 2 m, 1 m³/h or 3000 rpm if there is none yet.
 - In AutoAdapt modes the setpoint is shown but can't be changed.
 - If the pump rejects a command, the log shows `rejected by pump` and the entity falls back to the real state.
@@ -155,6 +155,6 @@ g++ -std=c++17 -I components/grundfos_alpha2go tests/test_geni.cpp -o t && ./t
 ## Open points
 
 - "Vent pump only" can't be started yet. It only shows up as control source 111 in object 86/8.
-- Not tested: other firmware versions and other ALPHA2 GO variants.
+- Not tested: other firmware versions and ALPHA2 GO variants other than 25-60 180 and 25-40 180.
 
 License: MIT. Independent project, not affiliated with Grundfos.

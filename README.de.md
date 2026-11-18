@@ -5,7 +5,7 @@
 Externe ESPHome-Komponente `grundfos_alpha2go`, die eine Grundfos-Umwälzpumpe **ALPHA2 GO** über Bluetooth LE ausliest und steuert, ohne die Grundfos-App.
 Die in ESPHome enthaltene `alpha3`-Komponente funktioniert mit der ALPHA2 GO nicht: Sie fragt Durchfluss und Förderhöhe über ein Objekt ab, das nur die ursprüngliche ALPHA3 hat.
 
-**Status:** Getestet mit einer ALPHA2 GO 25-60 180, Lesen und Schreiben. Baut mit ESPHome 2026.10.2 (ESP-IDF und Arduino).
+**Status:** Lesen und Schreiben getestet mit einer ALPHA2 GO 25-60 180. Drei Pumpen (2× ALPHA2 GO 25-60 180, 1× ALPHA2 GO 25-40 180) laufen gleichzeitig an einem ESP32. Baut mit ESPHome 2026.10.2 (ESP-IDF und Arduino).
 Das Protokoll stammt aus der Grundfos-GO-App und dem Mitschnitt von `Lasse-source/esphome-grundfos-alpha2-go`.
 
 ## Schnellstart
@@ -37,7 +37,7 @@ Ein vollständiges Beispiel mit allen Entitäten steht in [`example/grundfos-alp
 1. ESP flashen. **Beim ersten Verbinden die Bluetooth-Taste an der Pumpe drücken**, sonst lehnt die Pumpe ab (`reason=82`). Der Bond liegt danach im Flash des ESP und übersteht Neustarts und OTA-Updates.
 2. Die GO-App auf dem Handy schließen. Die Pumpe akzeptiert nur einen Client gleichzeitig.
 
-Mehrere Pumpen: je Pumpe ein eigener `ble_client` und ein eigener `grundfos_alpha2go`-Block; jede Pumpe einzeln per Bluetooth-Taste koppeln.
+Mehrere Pumpen: je Pumpe ein eigener `ble_client` und ein eigener `grundfos_alpha2go`-Block; jede Pumpe einzeln per Bluetooth-Taste koppeln. Drei Pumpen an einem ESP32 sind getestet; ESPHome erlaubt standardmäßig 3 BLE-Verbindungen, für mehr `esp32_ble: max_connections:` setzen (ESP-IDF, bis 9).
 
 > **Hinweis:** Binär- und Textsensoren der Komponente (`connected`, `night_mode`, `venting_status` …) gehören in denselben `sensor:`-Block wie die Messwerte, nicht unter `binary_sensor:` oder `text_sensor:`.
 
@@ -116,7 +116,7 @@ button:
 | `venting_start` / `venting_stop` | System-Entlüftung manuell starten / abbrechen |
 
 - Der angezeigte Zustand kommt immer aus der Pumpe: Nach jedem Schreiben liest die Komponente ihn zurück. Änderungen in der App oder an der Pumpe erscheinen mit der nächsten Abfrage. Beim Booten schreibt der ESP nichts.
-- Voreingestellte Grenzen: 0,5–6 m, 0,1–3,5 m³/h, 1000–5500 1/min. Anpassbar mit `min_value`, `max_value` und `step`.
+- Voreingestellte Grenzen: 0,5–6 m, 0,1–3,5 m³/h, 1000–5500 1/min. Anpassbar mit `min_value`, `max_value` und `step`, z. B. `max_value: 4` für eine 25-40.
 - Wechselt die Regelart die Einheit, wird der zuletzt bekannte Sollwert dieser Einheit mitgeschickt, sonst 2 m, 1 m³/h bzw. 3000 1/min.
 - Bei AutoAdapt wird der Sollwert angezeigt, lässt sich aber nicht verstellen.
 - Lehnt die Pumpe einen Befehl ab, steht `rejected by pump` im Log, und die Entität springt auf den tatsächlichen Zustand zurück.
@@ -155,6 +155,6 @@ g++ -std=c++17 -I components/grundfos_alpha2go tests/test_geni.cpp -o t && ./t
 ## Offen
 
 - „Nur Pumpe entlüften“ lässt sich noch nicht starten; die Funktion ist nur als Steuerquelle 111 in Objekt 86/8 sichtbar.
-- Ungeprüft: andere Firmware-Stände und andere ALPHA2-GO-Varianten.
+- Ungeprüft: andere Firmware-Stände und andere ALPHA2-GO-Varianten als 25-60 180 und 25-40 180.
 
 Lizenz: MIT. Unabhängiges Projekt, nicht von Grundfos.
